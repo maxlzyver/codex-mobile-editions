@@ -52,7 +52,7 @@
 
 ## 运行与验证范围
 
-Windows 11 启动器已在当前 Windows 11 机器检查；Windows 10 启动器已编译并验证系统边界，但尚未在 Windows 10 实机完整运行。macOS 的启动、进程管理、Unix socket 和更新代码独立实现；自动化测试与 GitHub Actions 不能替代 Finder、真实 Codex 和手机网络的完整实机验收。各次结果见 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)。
+Windows 11 启动器已在当前 Windows 11 机器检查；Windows 10 启动器已编译并验证系统边界，但尚未在 Windows 10 实机完整运行。macOS 的启动、进程管理、Unix socket 和更新代码独立实现；已在 macOS 15 的 Apple 芯片与 Intel GitHub 运行器分别通过 143 项测试，包含中文路径下的原生进程核验。自动化测试不能替代 Finder、真实 Codex 和手机网络的完整实机验收。各次结果见 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)。
 
 原桌面连接依赖 Codex 内部接口，可能随其升级变化。局域网需要设备互通；互联网模式使用 Cloudflare Quick Tunnel，地址不固定、流量经过 Cloudflare。电脑需要保持开机、联网且不休眠。
 

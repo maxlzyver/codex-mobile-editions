@@ -212,9 +212,9 @@
       "sha256": "044a2ef87175ac6d1f94f838a3cced732b79c759492a7e5b40e3c8b0b17fc725"
     },
     {
-      "bytes": 18331,
+      "bytes": 18335,
       "path": "test/update-installer.test.mjs",
-      "sha256": "27d1c61e4ac82e1077776e1bcd531b01ff6c39a686ba0ea017a11e5d206872cd"
+      "sha256": "98a258c445c9093b02e86c79af6de6ff30453de52805bf548a633dfef5b85e5a"
     },
     {
       "bytes": 22177,

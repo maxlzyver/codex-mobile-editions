@@ -120,7 +120,7 @@ test('a correctly hashed ZIP from the other Windows edition is rejected before p
 });
 
 test('a mismatched file hash and symlink archive are rejected before modifying programs', {skip:process.platform!=='win32'}, async t => {
-  const hash=await fixture(t,{badHash:true}); await assert.rejects(hash.prepare(),/checksum mismatch/);
+  const hash=await fixture(t,{badHash:true}); await assert.rejects(hash.prepare(),/checksum\s+mismatch/);
   assert.equal(await readFile(path.join(hash.rootDir,'server.mjs'),'utf8'),'old-server');
   const link=await fixture(t,{extras:[{name:'codex-mobile/lib/link',data:'../../outside',attributes:(0xa1ff<<16)>>>0}]});
   await assert.rejects(link.prepare(),/symbolic links/);
@@ -129,7 +129,7 @@ test('a mismatched file hash and symlink archive are rejected before modifying p
 test('tampering with prepared inventory cancels apply and busy state never invokes shutdown', {skip:process.platform!=='win32'}, async t => {
   const f=await fixture(t); await f.prepare();
   await writeFile(path.join(f.jobDir,'inventory.json'),'[]');
-  await assert.rejects(f.apply(),/inventory changed/);
+  await assert.rejects(f.apply(),/inventory\s+changed/);
   let called=false;
   const install=createInstaller({rootDir:f.rootDir,runtimeDir:f.runtimeDir,isBusy:()=>true,onBeforeInstall:()=>{called=true;}});
   await assert.rejects(install(f.prepared),error=>error.status===409);
