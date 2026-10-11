@@ -1,0 +1,9 @@
+{
+  "id": "windows11",
+  "version": "1.0.0",
+  "label": "Windows 11 专用版",
+  "platform": "Windows 11 x64",
+  "repository": "maxlzyver/codex-mobile-editions",
+  "updatePath": "editions/windows11",
+  "assetName": "codex-mobile-windows11-1.0.0-x64.zip"
+}

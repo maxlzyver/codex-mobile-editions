@@ -1,0 +1,780 @@
+'use strict';
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const icons = {
+    phone: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4M11 19h2"/>',
+    logout: '<path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4m5-12 4 4-4 4m-5-4h10"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>',
+    refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 18 17"/>',
+    computer: '<rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8m-4-5v5"/>',
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    sparkles: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3ZM20 2v4m-2-2h4"/>',
+    folder: '<path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 2h18"/>',
+    activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+    'arrow-up': '<path d="M12 19V5m-6 6 6-6 6 6"/>',
+    shield: '<path d="m12 3 8 3v5c0 5-8 10-8 10S4 16 4 11V6l8-3Z"/><path d="m8 12 3 3 5-6"/>',
+    wifi: '<path d="M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0m-11 4a6 6 0 0 1 8 0M12 20h.01"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-5 5-5 13 0 18m0-18c5 5 5 13 0 18"/>',
+    qr: '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h3v3h3m-6 3v-3m6-6v3M12 3v3m0 6h3M3 12h3m6 6v3m6-9h3"/>',
+    copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3"/>',
+    chat: '<path d="M21 11a9 9 0 0 1-9 9H4l-2 2 1-7a9 9 0 1 1 18-4Z"/><path d="M8 10h8m-8 4h5"/>',
+    terminal: '<path d="m5 6 6 6-6 6m9 0h5"/>',
+  };
+  function icon(name) {
+    const span = document.createElement('span');
+    span.className = 'icon';
+    // Only the fixed, authored icon paths above are inserted as markup.
+    span.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.chat}</svg>`;
+    return span;
+  }
+  document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(...icon(node.dataset.icon).childNodes));
+
+  const state = {
+    role: 'loading', csrf: '', bootstrap: null, activeId: null, threads: [], thread: null,
+    pairing: null, pairMode: 'lan', pairingBusy: false, pairToken: '', sending: false,
+    readBusy: false, statusBusy: false, devicesBusy: false, lastMessages: '', lastApprovals: '',
+    lastThreads: '', lastDevices: '', lastStatus: '', connected: true, toastTimer: null, authTimer: null,
+    wantInternetPair: false, shownReady: false, activeReadOnly: false, lanUrl: '', lastThreadError: '',
+    models: [], projects: [], projectId: '', filesProjectId: '', filePath: '', filesGeneration: 0, selectionThread: null, view: 'chat', modelsBusy: false,
+  };
+  const hidden = (id, value) => $(id).classList.toggle('hidden', value);
+  const node = (tag, className, text) => {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined && text !== null) el.textContent = String(text);
+    return el;
+  };
+  function toast(message) {
+    $('toast').textContent = message;
+    hidden('toast', false);
+    clearTimeout(state.toastTimer);
+    state.toastTimer = setTimeout(() => hidden('toast', true), 3800);
+  }
+  function showError(error) {
+    $('error-banner').textContent = error?.message || String(error);
+    hidden('error-banner', false);
+  }
+  async function api(path, options = {}) {
+    const method = options.method || 'GET';
+    const headers = { Accept: 'application/json' };
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+    if (method !== 'GET' && state.csrf) headers['X-CSRF-Token'] = state.csrf;
+    const response = await fetch(path, {
+      method, headers, credentials: 'same-origin', cache: 'no-store',
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+      signal: AbortSignal.timeout(30000),
+    });
+    let data;
+    try { data = await response.json(); } catch { data = {}; }
+    if (!response.ok) {
+      const detail = typeof data.error === 'string' ? data.error : (data.error?.message || data.message);
+      const error = new Error(detail || `请求未完成（${response.status}）`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+  function dateLabel(value) {
+    if (!value) return '';
+    const date = new Date(typeof value === 'number' && value < 1e12 ? value * 1000 : value);
+    if (Number.isNaN(date.getTime())) return '';
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) return `今天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  }
+  function isRunning(thread) {
+    const status = typeof thread?.status === 'object' ? thread.status.type : thread?.status;
+    return ['running', 'inProgress', 'active', 'busy', 'streaming'].includes(status) || Boolean(thread?.running);
+  }
+  function statusLabel(thread) {
+    if (isRunning(thread)) return '正在工作';
+    const status = typeof thread?.status === 'object' ? thread.status.type : thread?.status;
+    return ({ completed: '已完成', idle: '就绪', error: '需要处理', failed: '需要处理', interrupted: '已停止', stopped: '已停止', waiting: '等待确认', waiting_for_approval: '等待确认' })[status] || '';
+  }
+  function updateStatus() {
+    const info = state.bootstrap || {};
+    const status = info.status || {};
+    const connected = state.connected && status.codex !== 'error';
+    hidden('reconnect', state.role !== 'owner' || status.codex !== 'error');
+    $('connection-status').classList.toggle('offline', !connected);
+    $('connection-status').lastElementChild.textContent = state.connected ? (status.codex === 'connected' ? '电脑已连接' : status.codex === 'error' ? 'Codex 未就绪' : state.role === 'pending' ? '等待确认' : '正在连接') : '连接中断 · 重试中';
+    $('computer-name').textContent = status.hostname || '我的电脑';
+    $('codex-state').textContent = info.desktop?.connected ? '已接入桌面 Codex' : status.codex === 'connected' ? (status.mode === 'shared' ? '已接入共享 Codex' : 'Codex 本地任务已就绪') : status.error || '正在连接 Codex';
+    const standalone = status.mode === 'standalone';
+    $('composer-hint').textContent = state.thread?.native ? '已连接桌面原会话 · 发出的指令在同一聊天执行；审批与强制停止请在电脑端操作。' : standalone ? '指令使用电脑的 Codex 执行，项目文件即时共享。桌面原会话的控制能力见会话提示。' : '任务在这台电脑上执行 · 需要确认的操作会在对话中提示';
+    if (status.error && state.role === 'owner' && state.lastStatus !== status.error) {
+      showError(new Error(status.error));
+      state.lastStatus = status.error;
+    }
+  }
+  function showAuth(title, description, loading = false, note = '') {
+    hidden('auth-view', false);
+    hidden('workspace', true);
+    $('auth-title').textContent = title;
+    $('auth-description').textContent = description;
+    $('auth-note').textContent = note;
+    hidden('auth-progress', !loading);
+    hidden('pair-form', true);
+  }
+  async function bootstrap() {
+    if (state.statusBusy) return;
+    state.statusBusy = true;
+    try {
+      const previousRole = state.role;
+      const data = await api('/api/bootstrap');
+      state.bootstrap = data;
+      state.role = data.role || 'anonymous';
+      state.csrf = data.csrfToken || '';
+      state.connected = true;
+      $('app').dataset.role = state.role;
+      updateStatus();
+      if (['owner', 'controller'].includes(state.role)) {
+        hidden('auth-view', true);
+        hidden('workspace', false);
+        if (!state.shownReady || previousRole !== state.role) {
+          state.shownReady = true;
+          await loadThreads();
+          await Promise.allSettled([loadProjects(), loadModels()]);
+          if (previousRole === 'pending') toast('电脑已确认，现在可以开始工作了');
+        }
+      } else if (state.role === 'pending') {
+        showAuth('请在电脑上确认连接', '你的设备正在等待确认。请在电脑的「连接手机」窗口中批准本次连接。', true, '确认后会自动进入你的工作空间。');
+      } else if (state.pairToken) {
+        showAuth('连接你的 Codex', '配对后，就能在手机上查看进度、发送指令。');
+        hidden('pair-form', false);
+      } else {
+        if ($('preview-dialog').open) $('preview-dialog').close();
+        $('preview-content').replaceChildren();
+        showAuth(previousRole === 'controller' ? '此设备已断开连接' : '把 Codex 带到手机上', '请在电脑上打开「连接手机」，用手机相机扫描二维码，然后在浏览器中打开链接。', false, '配对链接有时效；已过期时请在电脑重新生成。');
+      }
+      if ($('pair-dialog').open && state.role === 'owner') {
+        updateInternetNote();
+        if (state.wantInternetPair && data.connection?.publicUrl) {
+          state.wantInternetPair = false;
+          await createPairing();
+        }
+      }
+    } catch (error) {
+      state.connected = false;
+      updateStatus();
+      if (state.role === 'loading') showAuth('暂时无法连接电脑', '请确认电脑上的 Codex 移动助手服务正在运行，并检查手机与电脑的网络连接。', true, error.message);
+    } finally { state.statusBusy = false; }
+  }
+
+  async function loadThreads() {
+    if (!['owner', 'controller'].includes(state.role)) return;
+    try {
+      const data = await api('/api/threads');
+      state.threads = data.threads || data.data || [];
+      const key = JSON.stringify(state.threads.map((t) => [t.id, t.title || t.name || t.preview, t.updatedAt, t.status]));
+      if (key === state.lastThreads) return;
+      state.lastThreads = key;
+      renderThreads();
+    } catch (error) {
+      if (error.status === 401 || error.status === 403) await bootstrap();
+      else if (!state.threads.length) $('thread-list').replaceChildren(node('p', 'list-empty', `任务列表暂不可用：${error.message}`));
+    }
+  }
+  function renderThreads() {
+    const list = $('thread-list');
+    list.replaceChildren();
+    if (!state.threads.length) {
+      list.append(node('p', 'list-empty', '还没有任务，开始第一段工作吧。'));
+      return;
+    }
+    for (const thread of state.threads) {
+      const button = node('button', `thread-item${thread.id === state.activeId ? ' active' : ''}`);
+      button.type = 'button';
+      button.append(icon('chat'));
+      const text = node('span', 'thread-item-text');
+      text.append(node('span', 'thread-item-title', thread.title || thread.name || thread.preview || '未命名任务'));
+      text.append(node('span', 'thread-item-meta', [statusLabel(thread), dateLabel(thread.updatedAt || thread.createdAt)].filter(Boolean).join(' · ')));
+      button.append(text);
+      button.addEventListener('click', () => openThread(thread.id));
+      list.append(button);
+    }
+  }
+  function closeSidebar() { $('workspace').classList.remove('sidebar-open'); }
+  function resetConversation() {
+    showView('chat');
+    state.activeId = null;
+    state.thread = null;
+    state.activeReadOnly = false;
+    state.lastThreadError = '';
+    state.lastMessages = '';
+    state.lastApprovals = '';
+    state.selectionThread = null;
+    hidden('history-notice', true);
+    $('project-select').disabled = false;
+    $('model-select').disabled = false;
+    $('effort-select').disabled = false;
+    updateStatus();
+    updateProjectContext();
+    $('messages').replaceChildren();
+    $('approvals').replaceChildren();
+    $('thread-title').textContent = '新的开始';
+    hidden('welcome', false);
+    hidden('thread-state', true);
+    hidden('stop-turn', true);
+    hidden('error-banner', true);
+    $('prompt').disabled = false;
+    $('prompt').placeholder = '描述你想做的事…';
+    $('send').disabled = false;
+    renderThreads();
+    closeSidebar();
+  }
+  async function openThread(id) {
+    if (!id) return;
+    resetConversation();
+    state.activeId = id;
+    hidden('welcome', true);
+    $('messages').append(node('p', 'list-empty', '正在读取任务记录…'));
+    renderThreads();
+    await loadThread(true);
+  }
+  async function loadThread(forceScroll = false) {
+    if (!state.activeId || state.readBusy) return;
+    const id = state.activeId;
+    state.readBusy = true;
+    try {
+      const data = await api(`/api/threads/${encodeURIComponent(id)}`);
+      if (id !== state.activeId) return;
+      state.thread = data.thread || data;
+      const thread = state.thread;
+      const running = isRunning(thread);
+      if (thread.error && thread.error !== state.lastThreadError) {
+        state.lastThreadError = thread.error;
+        showError(new Error(thread.error));
+      }
+      state.activeReadOnly = Boolean(thread.readOnly || data.readOnly || thread.controllable === false || data.controllable === false);
+      if (state.selectionThread !== id) {
+        state.selectionThread = id;
+        const project = state.projects.find(p => normalizePath(p.path) === normalizePath(thread.cwd));
+        if (project) { state.projectId = project.id; $('project-select').value = project.id; }
+        $('model-select').value = thread.model && state.models.some(m => m.model === thread.model) ? thread.model : '';
+        renderEfforts(thread.effort);
+      }
+      $('thread-cwd').textContent = thread.cwd || '未指定工作目录';
+      $('thread-cwd').title = thread.cwd || '';
+      $('project-select').disabled = true;
+      $('model-select').disabled = running && !state.activeReadOnly;
+      $('effort-select').disabled = running && !state.activeReadOnly;
+      $('active-model').textContent = [thread.model || (thread.native ? '沿用桌面会话设置' : $('model-select').value || 'Codex 默认模型'), thread.effort].filter(Boolean).join(' · ');
+      hidden('history-notice', !state.activeReadOnly);
+      $('thread-title').textContent = thread.title || thread.name || thread.preview || '任务对话';
+      $('thread-state').textContent = state.activeReadOnly ? '历史记录' : `${thread.native ? '桌面原会话 · ' : ''}${statusLabel(thread)}`;
+      hidden('thread-state', !state.activeReadOnly && !statusLabel(thread));
+      hidden('stop-turn', !running || state.activeReadOnly || thread.capabilities?.stop === false);
+      updateStatus();
+      $('prompt').disabled = state.activeReadOnly;
+      $('prompt').placeholder = state.activeReadOnly ? '点上方「在此继续分支」，保留上下文继续工作。' : running ? 'Codex 正在工作，你可以输入下一条指令…' : '描述你想做的事…';
+      $('send').disabled = state.activeReadOnly || state.sending;
+      hidden('welcome', true);
+      const messages = thread.messages || data.messages || [];
+      const key = JSON.stringify([messages, running]);
+      if (key !== state.lastMessages) {
+        const scroll = $('conversation-scroll');
+        const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 140;
+        state.lastMessages = key;
+        renderMessages(messages, running);
+        if (forceScroll || nearBottom) requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
+      }
+      const approvals = data.approvals || thread.approvals || [];
+      const approvalKey = JSON.stringify(approvals);
+      if (approvalKey !== state.lastApprovals) {
+        state.lastApprovals = approvalKey;
+        renderApprovals(approvals);
+      }
+    } catch (error) {
+      if (forceScroll || (error.status !== 401 && error.status !== 403)) showError(error);
+      if (error.status === 401 || error.status === 403) await bootstrap();
+    } finally { state.readBusy = false; }
+  }
+  function messageText(message) {
+    if (typeof message.text === 'string') return message.text;
+    if (typeof message.content === 'string') return message.content;
+    if (Array.isArray(message.content)) return message.content.map((part) => typeof part === 'string' ? part : part.text || '').join('\n');
+    return message.output || message.command || message.summary || '';
+  }
+  function renderMessages(messages, running) {
+    const list = $('messages');
+    const expanded = new Set([...list.querySelectorAll('details[open]')].map((detail) => detail.dataset.messageId));
+    list.replaceChildren();
+    for (const item of messages) {
+      const content = messageText(item);
+      if (!content) continue;
+      const role = item.role === 'user' ? 'user' : item.role === 'tool' || ['command', 'commandExecution', 'tool', 'fileChange'].includes(item.type) ? 'tool' : 'assistant';
+      const article = node('article', `message ${role}`);
+      article.append(node('div', 'message-avatar', role === 'user' ? '我' : role === 'tool' ? '⌘' : 'C'));
+      const body = node('div', 'message-body');
+      const heading = node('div', 'message-name', role === 'user' ? '你' : role === 'tool' ? item.title || '执行记录' : 'Codex');
+      if (item.createdAt) heading.append(node('time', '', dateLabel(item.createdAt)));
+      body.append(heading);
+      const pre = node('pre', 'message-content', content);
+      if (role === 'tool') {
+        const detail = node('details');
+        detail.dataset.messageId = item.id || '';
+        detail.open = expanded.has(detail.dataset.messageId);
+        detail.append(node('summary', '', item.title || String(content).split('\n')[0].slice(0, 100)), pre);
+        body.append(detail);
+      } else body.append(pre);
+      article.append(body);
+      list.append(article);
+    }
+    if (running) list.append(node('div', 'turn-activity', 'Codex 正在工作，内容会实时更新…'));
+    else if (!messages.length) list.append(node('p', 'list-empty', '这个任务还没有消息。发送一条指令，继续工作。'));
+  }
+  function renderApprovals(approvals) {
+    $('approvals').replaceChildren();
+    for (const approval of approvals) {
+      const card = node('section', 'approval');
+      const type = approval.type || approval.method || '';
+      const isQuestion = /requestUserInput/i.test(type) || Array.isArray(approval.questions) || Array.isArray(approval.params?.questions);
+      card.append(node('h3', '', isQuestion ? 'Codex 需要你的回答' : '操作需要你的确认'));
+      const params = approval.params || approval;
+      const detail = approval.description || [params.command, params.reason, params.message, params.permissions ? `请求的权限：\n${JSON.stringify(params.permissions, null, 2)}` : '', params.changes ? JSON.stringify(params.changes, null, 2) : ''].filter(Boolean).join('\n\n') || type;
+      if (detail) card.append(node('pre', '', typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2)));
+      const inputs = [];
+      if (isQuestion) {
+        const questions = approval.questions || params.questions || [];
+        for (const question of questions) {
+          const label = node('label', 'approval-question', question.question || question.prompt || question.header || '你的回答');
+          let input;
+          if (question.options?.length) {
+            input = node('select', 'approval-answer');
+            for (const option of question.options) input.append(new Option(typeof option === 'string' ? option : option.label, typeof option === 'string' ? option : option.label));
+          } else { input = node('textarea', 'approval-answer'); input.rows = 2; }
+          label.append(input);
+          card.append(label);
+          inputs.push({ id: question.id, input });
+        }
+      }
+      const actions = node('div', 'approval-actions');
+      const accept = node('button', 'button button-primary', isQuestion ? '提交回答' : '允许这次操作');
+      accept.type = 'button';
+      accept.addEventListener('click', async () => {
+        const answers = {};
+        for (const answer of inputs) answers[answer.id] = { answers: [answer.input.value] };
+        await decideApproval(approval.id, 'accept', isQuestion ? answers : undefined, accept);
+      });
+      const decline = node('button', 'button', isQuestion ? '停止任务' : '拒绝');
+      decline.type = 'button';
+      decline.addEventListener('click', () => isQuestion ? stopTurn() : decideApproval(approval.id, 'decline', undefined, decline));
+      actions.append(accept, decline);
+      card.append(actions);
+      $('approvals').append(card);
+    }
+  }
+  async function decideApproval(id, decision, answers, button) {
+    button.disabled = true;
+    try {
+      await api(`/api/approvals/${encodeURIComponent(id)}`, { method: 'POST', body: { decision, ...(answers ? { answers } : {}) } });
+      toast(decision === 'accept' ? '已发送确认' : '已拒绝该操作');
+      await loadThread();
+    } catch (error) { showError(error); button.disabled = false; }
+  }
+  function resizePrompt() {
+    $('prompt').style.height = 'auto';
+    $('prompt').style.height = `${Math.min($('prompt').scrollHeight, 180)}px`;
+  }
+  async function sendPrompt(event) {
+    event.preventDefault();
+    const prompt = $('prompt').value.trim();
+    if (!prompt || state.sending || state.activeReadOnly) return;
+    state.sending = true;
+    $('send').disabled = true;
+    hidden('error-banner', true);
+    try {
+      let data;
+      if (!state.activeId) {
+        data = await api('/api/threads', { method: 'POST', body: { prompt, projectId: $('project-select').value || undefined, ...modelChoice() } });
+        state.activeId = data.thread?.id || data.threadId || data.id;
+        if (!state.activeId) throw new Error('任务已提交，但服务器没有返回任务编号。请刷新任务列表。');
+      } else data = await api(`/api/threads/${encodeURIComponent(state.activeId)}/messages`, { method: 'POST', body: { prompt, ...modelChoice() } });
+      $('prompt').value = '';
+      resizePrompt();
+      hidden('welcome', true);
+      state.lastMessages = '';
+      await loadThread(true);
+      await loadThreads();
+    } catch (error) { showError(error); }
+    finally { state.sending = false; $('send').disabled = state.activeReadOnly; }
+  }
+  async function stopTurn() {
+    if (!state.activeId) return;
+    $('stop-turn').disabled = true;
+    try { await api(`/api/threads/${encodeURIComponent(state.activeId)}/stop`, { method: 'POST', body: {} }); toast('已发送停止请求'); await loadThread(); }
+    catch (error) { showError(error); }
+    finally { $('stop-turn').disabled = false; }
+  }
+
+  const effortLabels = { none: '无', minimal: '最少', low: '低', medium: '中', high: '高', xhigh: '极高', max: '最高', ultra: '超高' };
+  const normalizePath = value => String(value || '').replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+  function modelChoice() { return { model: $('model-select').value || undefined, effort: $('effort-select').value || undefined }; }
+  function renderEfforts(preferred) {
+    const model = state.models.find(m => m.model === $('model-select').value);
+    const previous = preferred || $('effort-select').value;
+    $('effort-select').replaceChildren(...(model?.supportedReasoningEfforts || []).map(e => new Option(effortLabels[e.reasoningEffort] || e.reasoningEffort, e.reasoningEffort)));
+    if (!model) $('effort-select').append(new Option('沿用设置', ''));
+    const values = [...$('effort-select').options].map(o => o.value);
+    $('effort-select').value = values.includes(previous) ? previous : model?.defaultReasoningEffort || values[0] || '';
+    if (!state.activeId) $('active-model').textContent = [model?.displayName || 'Codex 默认模型', $('effort-select').value].filter(Boolean).join(' · ');
+  }
+  async function loadModels() {
+    if (state.modelsBusy) return;
+    state.modelsBusy = true;
+    try {
+      const previous = $('model-select').value;
+      const data = await api('/api/models'); state.models = data.models || [];
+      $('model-select').replaceChildren(new Option('沿用默认 / 当前会话', ''), ...state.models.map(m => new Option(m.displayName || m.model, m.model)));
+      $('model-select').value = state.models.some(m => m.model === previous) ? previous : '';
+      renderEfforts();
+    } catch (error) {
+      if (!state.models.length) $('model-select').replaceChildren(new Option('模型列表未就绪 · 点击刷新', ''));
+      toast(`模型列表：${error.message}`);
+    } finally { state.modelsBusy = false; }
+  }
+  function updateProjectContext() {
+    const project = state.projects.find(p => p.id === state.projectId);
+    $('thread-cwd').textContent = project?.path || state.bootstrap?.defaultCwd || '请选择工作项目';
+    $('thread-cwd').title = $('thread-cwd').textContent;
+  }
+  async function loadProjects() {
+    try {
+      const data = await api('/api/projects'); state.projects = data.projects || [];
+      const defaultProject = state.projects.find(p => normalizePath(p.path) === normalizePath(state.bootstrap?.defaultCwd));
+      const current = state.thread && state.projects.find(p => normalizePath(p.path) === normalizePath(state.thread.cwd));
+      if (current) state.projectId = current.id;
+      else if (!state.projects.some(p => p.id === state.projectId)) state.projectId = defaultProject?.id || state.projects[0]?.id || '';
+      for (const id of ['project-select', 'files-project']) {
+        $(id).replaceChildren(...state.projects.map(p => {
+          const option = new Option(`${p.name}${p.exists ? '' : '（目录已不存在）'} · ${p.path}`, p.id);
+          option.disabled = !p.exists; return option;
+        }));
+      }
+      $('project-select').value = state.projectId;
+      if (!state.projects.some(p => p.id === state.filesProjectId)) state.filesProjectId = state.projectId;
+      $('files-project').value = state.filesProjectId;
+      if (!state.activeId) updateProjectContext();
+    } catch (error) { $('files-error').textContent = error.message; }
+  }
+  function showView(view) {
+    state.view = view; hidden('chat-panel', view !== 'chat'); hidden('files-panel', view !== 'files'); closeSidebar();
+  }
+  async function openFiles(preferCurrent = false) {
+    showView('files'); await loadProjects();
+    if (preferCurrent && state.projectId) state.filesProjectId = state.projectId;
+    $('files-project').value = state.filesProjectId;
+    await browseFiles('');
+  }
+  function fileUrl(action, filePath) { return `/api/projects/${encodeURIComponent(state.filesProjectId)}/${action}?path=${encodeURIComponent(filePath)}`; }
+  function formatBytes(value) {
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
+    if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+    return `${(value / 1024 ** 3).toFixed(1)} GB`;
+  }
+  async function browseFiles(relativePath = '') {
+    if (!state.filesProjectId) return;
+    const generation = ++state.filesGeneration;
+    $('files-error').textContent = ''; $('file-list').replaceChildren(node('p', 'list-empty', '正在读取电脑文件…'));
+    try {
+      const data = await api(fileUrl('files', relativePath));
+      if (generation !== state.filesGeneration) return;
+      state.filePath = data.path || '';
+      $('files-project-path').textContent = data.project.path;
+      $('file-breadcrumbs').replaceChildren();
+      const crumbs = data.breadcrumbs?.length ? data.breadcrumbs : [{ name: data.project.name, path: '' }];
+      for (const crumb of crumbs) {
+        const button = node('button', '', crumb.name); button.type = 'button'; button.addEventListener('click', () => browseFiles(crumb.path));
+        $('file-breadcrumbs').append(button, node('span', '', '/'));
+      }
+      $('file-count').textContent = `${data.entries.length} 项`;
+      $('file-list').replaceChildren();
+      for (const entry of data.entries) {
+        const directory = entry.type === 'directory';
+        const row = node('div', 'file-row');
+        const open = node('button', 'file-open'); open.type = 'button'; open.append(icon(directory ? 'folder' : 'terminal'));
+        const label = node('span', 'file-label'); label.append(node('strong', '', entry.name), node('small', '', `${directory ? '文件夹' : formatBytes(entry.size)} · ${dateLabel(entry.modifiedAt)}`)); open.append(label);
+        open.addEventListener('click', () => directory ? browseFiles(entry.path) : previewFile(entry)); row.append(open);
+        if (!directory) { const download = node('a', 'button file-download', '下载'); download.href = fileUrl('download', entry.path); download.setAttribute('download', entry.name); row.append(download); }
+        $('file-list').append(row);
+      }
+      if (!data.entries.length) $('file-list').append(node('p', 'list-empty', '这个文件夹是空的。'));
+    } catch (error) { if (generation === state.filesGeneration) { $('files-error').textContent = error.message; $('file-list').replaceChildren(); } }
+  }
+  let previewGeneration = 0;
+  async function previewFile(entry) {
+    const generation = ++previewGeneration;
+    const downloadUrl = fileUrl('download', entry.path), contentUrl = fileUrl('content', entry.path), textUrl = fileUrl('preview', entry.path);
+    $('preview-title').textContent = entry.name; $('preview-download').href = downloadUrl; $('preview-download').download = entry.name;
+    $('preview-content').replaceChildren(); $('preview-dialog').showModal();
+    if (/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(entry.name)) {
+      const img = node('img', 'file-image'); img.alt = entry.name; img.src = contentUrl;
+      img.onerror = () => { if (generation === previewGeneration) $('preview-content').replaceChildren(node('p', '', '图片暂时无法预览，请下载查看。')); };
+      $('preview-content').append(img); return;
+    }
+    if (/\.pdf$/i.test(entry.name)) {
+      const open = node('a', 'button', '在新标签页阅读 PDF'); open.href = contentUrl; open.target = '_blank'; open.rel = 'noopener';
+      $('preview-content').append(node('p', '', '使用浏览器的 PDF 阅读器翻页、缩放，或下载到手机阅读。'), open); return;
+    }
+    $('preview-content').append(node('p', '', '正在读取文件…'));
+    try {
+      const data = await api(textUrl); if (generation !== previewGeneration) return;
+      $('preview-content').replaceChildren(node('pre', 'file-text', data.text));
+    } catch (error) { if (generation === previewGeneration) $('preview-content').replaceChildren(node('p', '', `${error.message} 点击右上角「下载文件」可保存到手机。`)); }
+  }
+  async function forkThread() {
+    if (!state.activeId || state.sending) return;
+    const source = state.activeId;
+    $('fork-thread').disabled = true;
+    try {
+      const data = await api(`/api/threads/${encodeURIComponent(source)}/fork`, { method: 'POST', body: modelChoice() });
+      const id = data.thread?.id || data.threadId || data.id;
+      await loadThreads(); await openThread(id);
+      toast('已保留对话上下文。后续指令使用同一电脑项目，在这个分支执行。');
+    } catch (error) { showError(error); }
+    finally { $('fork-thread').disabled = false; }
+  }
+
+  async function openPairDialog() {
+    if (state.role !== 'owner') return;
+    if (!$('pair-dialog').open) $('pair-dialog').showModal();
+    updateLanOptions();
+    await Promise.allSettled([createPairing(), loadDevices()]);
+  }
+  function updateLanOptions() {
+    let options = $('lan-options');
+    if (!options) {
+      options = node('div', 'lan-options'); options.id = 'lan-options';
+      const label = node('label', '', '电脑网络地址'); label.htmlFor = 'lan-address';
+      const select = node('select'); select.id = 'lan-address';
+      select.addEventListener('change', () => { state.lanUrl = select.value; createPairing(); });
+      options.append(label, select);
+      $('pair-mode-description').after(options);
+    }
+    const urls = state.bootstrap?.connection?.lanUrls || [];
+    options.classList.toggle('hidden', state.pairMode !== 'lan' || urls.length < 2);
+    $('lan-address').replaceChildren(...urls.map((url) => new Option(url.replace(/^https?:\/\//, ''), url)));
+    if (!urls.includes(state.lanUrl)) state.lanUrl = urls[0] || '';
+    $('lan-address').value = state.lanUrl;
+  }
+  function updateInternetNote() {
+    const info = state.bootstrap?.connection || {};
+    const note = $('internet-note');
+    note.replaceChildren();
+    hidden('internet-note', state.pairMode !== 'internet');
+    if (state.pairMode !== 'internet') return;
+    if (info.publicUrl) {
+      note.append(node('span', '', '互联网连接已开启。手机使用移动数据或其他 Wi-Fi，也可以扫码连接。'));
+      const stop = node('button', 'text-button', '关闭互联网连接');
+      stop.type = 'button'; stop.addEventListener('click', () => controlTunnel('stop'));
+      note.append(stop);
+    } else if (['starting', 'connecting', 'installing'].includes(info.tunnelStatus)) {
+      note.append(node('span', '', '正在建立加密的互联网连接，首次启动可能需要下载连接组件。完成后会自动显示二维码。'));
+    } else {
+      note.append(node('span', '', info.tunnelError || '开启互联网连接后，手机可以通过移动数据远程控制这台电脑。链接仅对已确认的设备开放。'));
+      const start = node('button', 'text-button', '开启互联网连接');
+      start.type = 'button'; start.addEventListener('click', () => controlTunnel('start'));
+      note.append(start);
+    }
+  }
+  async function controlTunnel(action) {
+    if (action === 'start') state.wantInternetPair = true;
+    try {
+      await api('/api/tunnel', { method: 'POST', body: { action } });
+      if (action === 'stop') { state.pairing = null; state.wantInternetPair = false; }
+      await bootstrap();
+      if (action === 'stop') showPairPlaceholder('互联网连接已关闭');
+      else if (state.bootstrap?.connection?.publicUrl) { state.wantInternetPair = false; await createPairing(); }
+      else showPairPlaceholder('正在建立互联网连接…');
+      updateInternetNote();
+    } catch (error) { toast(error.message); state.wantInternetPair = false; }
+  }
+  function showPairPlaceholder(message) {
+    hidden('pair-qr', true);
+    hidden('qr-placeholder', false);
+    $('qr-placeholder').querySelector('p').textContent = message;
+    $('pair-url').value = '';
+    $('pair-countdown').textContent = '请在电脑上完成连接设置';
+  }
+  async function createPairing() {
+    if (state.pairingBusy || state.role !== 'owner') return;
+    state.pairingBusy = true;
+    $('refresh-pair').disabled = true;
+    const mode = state.pairMode;
+    updateInternetNote();
+    try {
+      if (mode === 'internet' && !state.bootstrap?.connection?.publicUrl) {
+        state.pairing = null;
+        showPairPlaceholder('开启互联网连接后生成二维码');
+        return;
+      }
+      showPairPlaceholder('正在生成连接码');
+      const data = await api('/api/pairing', { method: 'POST', body: { mode, ...(mode === 'lan' && state.lanUrl ? { baseUrl: state.lanUrl } : {}) } });
+      if (mode !== state.pairMode) return;
+      state.pairing = data;
+      $('pair-url').value = data.url || '';
+      if (data.qrDataUrl) {
+        $('pair-qr').src = data.qrDataUrl;
+        hidden('pair-qr', false);
+        hidden('qr-placeholder', true);
+      } else showPairPlaceholder('复制下方链接，在手机浏览器打开');
+      $('pair-url').value = data.url || '';
+      updateCountdown();
+    } catch (error) {
+      state.pairing = null;
+      showPairPlaceholder(error.message);
+    } finally { state.pairingBusy = false; $('refresh-pair').disabled = false; if (mode !== state.pairMode) createPairing(); }
+  }
+  function updateCountdown() {
+    if (!state.pairing?.expiresAt) return;
+    const expires = typeof state.pairing.expiresAt === 'number' ? state.pairing.expiresAt : new Date(state.pairing.expiresAt).getTime();
+    const seconds = Math.max(0, Math.ceil(((expires < 1e12 ? expires * 1000 : expires) - Date.now()) / 1000));
+    $('pair-countdown').textContent = seconds ? `二维码将在 ${seconds} 秒后过期 · 仅可使用一次` : '二维码已过期，请刷新后重新扫码';
+    if (seconds === 0) { $('pair-qr').style.opacity = '.18'; $('copy-pair-url').disabled = true; if (!state.pairingBusy && $('pair-dialog').open) createPairing(); }
+    else { $('pair-qr').style.opacity = '1'; $('copy-pair-url').disabled = false; }
+  }
+  async function loadDevices() {
+    if (state.role !== 'owner' || state.devicesBusy) return;
+    state.devicesBusy = true;
+    try {
+      const data = await api('/api/devices');
+      const devices = data.devices || [];
+      const key = JSON.stringify(devices);
+      if (state.lastDevices === key) return;
+      state.lastDevices = key;
+      $('device-count').textContent = String(devices.filter((device) => device.status !== 'revoked').length);
+      $('device-list').replaceChildren();
+      if (!devices.length) $('device-list').append(node('p', 'list-empty', '扫码后，你的设备会显示在这里。'));
+      for (const device of devices) {
+        const row = node('div', 'device-row');
+        row.append(icon('phone'));
+        const info = node('div', 'device-info');
+        info.append(node('strong', '', device.name || '未命名设备'));
+        const pending = device.status === 'pending';
+        info.append(node('small', '', `${pending ? '等待你的确认' : device.status === 'revoked' ? '连接已撤销' : '已允许连接'}${device.lastSeen ? ' · ' + dateLabel(device.lastSeen) : ''}`));
+        row.append(info);
+        if (pending) {
+          const approve = node('button', 'button button-primary', '确认');
+          approve.type = 'button'; approve.addEventListener('click', () => deviceAction(device.id, 'approve', approve));
+          row.append(approve);
+        }
+        if (device.status !== 'revoked') {
+          const revoke = node('button', 'button button-danger', pending ? '拒绝' : '撤销');
+          revoke.type = 'button'; revoke.addEventListener('click', () => deviceAction(device.id, 'revoke', revoke));
+          row.append(revoke);
+        }
+        $('device-list').append(row);
+      }
+    } catch (error) {
+      if (!state.lastDevices) $('device-list').replaceChildren(node('p', 'list-empty', error.message));
+    } finally { state.devicesBusy = false; }
+  }
+  async function deviceAction(id, action, button) {
+    button.disabled = true;
+    try {
+      await api(`/api/devices/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: {} });
+      toast(action === 'approve' ? '设备已确认，手机现在可以开始工作' : '已撤销此设备的连接');
+      state.lastDevices = '';
+      await loadDevices();
+    } catch (error) { toast(error.message); button.disabled = false; }
+  }
+  async function submitPair(event) {
+    event.preventDefault();
+    const button = $('pair-form').querySelector('button');
+    button.disabled = true;
+    try {
+      await api('/api/pair', { method: 'POST', body: { token: state.pairToken, name: $('device-name').value.trim() || '我的手机' } });
+      state.pairToken = '';
+      await bootstrap();
+    } catch (error) { $('auth-note').textContent = error.message; }
+    finally { button.disabled = false; }
+  }
+
+  $('pair-open').addEventListener('click', openPairDialog);
+  $('reconnect').addEventListener('click', async () => {
+    $('reconnect').disabled = true;
+    try { await api('/api/reconnect', { method: 'POST', body: {} }); hidden('error-banner', true); state.lastStatus = ''; await bootstrap(); await loadThreads(); }
+    catch (error) { showError(error); }
+    finally { $('reconnect').disabled = false; }
+  });
+  $('welcome-pair').addEventListener('click', openPairDialog);
+  $('pair-close').addEventListener('click', () => $('pair-dialog').close());
+  $('pair-dialog').addEventListener('click', (event) => { if (event.target === $('pair-dialog')) { const box = $('pair-dialog').getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) $('pair-dialog').close(); } });
+  $('refresh-pair').addEventListener('click', createPairing);
+  document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', async () => {
+    state.pairMode = button.dataset.mode;
+    state.pairing = null;
+    updateLanOptions();
+    document.querySelectorAll('[data-mode]').forEach((item) => { item.classList.toggle('active', item === button); item.setAttribute('aria-selected', String(item === button)); });
+    $('pair-mode-description').textContent = state.pairMode === 'lan' ? '手机与电脑连接同一个 Wi-Fi 后扫码。' : '支持移动数据和其他 Wi-Fi，随时连接电脑。';
+    await createPairing();
+  }));
+  $('copy-pair-url').addEventListener('click', async () => {
+    const value = $('pair-url').value;
+    if (!value) return;
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+      else { $('pair-url').select(); if (!document.execCommand('copy')) throw new Error('copy'); }
+      toast('连接地址已复制，请仅发送给你自己的设备');
+    } catch { $('pair-url').select(); toast('请长按或按 Ctrl + C 复制连接地址'); }
+  });
+  $('pair-form').addEventListener('submit', submitPair);
+  $('new-thread').addEventListener('click', resetConversation);
+  $('projects-open').addEventListener('click', () => openFiles());
+  $('thread-files').addEventListener('click', () => openFiles(true));
+  $('files-sidebar').addEventListener('click', () => $('workspace').classList.add('sidebar-open'));
+  $('files-back-chat').addEventListener('click', () => showView('chat'));
+  $('files-refresh').addEventListener('click', async () => { await loadProjects(); await browseFiles(state.filePath); });
+  $('files-project').addEventListener('change', () => { state.filesProjectId = $('files-project').value; browseFiles(''); });
+  $('project-select').addEventListener('change', () => { state.projectId = $('project-select').value; updateProjectContext(); });
+  $('project-task').addEventListener('click', () => { state.projectId = state.filesProjectId; $('project-select').value = state.projectId; resetConversation(); $('prompt').focus(); });
+  $('model-select').addEventListener('change', () => renderEfforts());
+  $('refresh-models').addEventListener('click', loadModels);
+  $('fork-thread').addEventListener('click', forkThread);
+  $('preview-close').addEventListener('click', () => $('preview-dialog').close());
+  $('preview-dialog').addEventListener('close', () => { previewGeneration++; $('preview-content').replaceChildren(); });
+  $('add-project-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    try { await api('/api/projects', { method: 'POST', body: { path: $('add-project-path').value.trim() } }); $('add-project-path').value = ''; await loadProjects(); toast('项目目录已添加，手机端刷新即可看到。'); }
+    catch (error) { $('files-error').textContent = error.message; }
+  });
+  $('mobile-new').addEventListener('click', resetConversation);
+  $('refresh-threads').addEventListener('click', async () => { await bootstrap(); state.lastThreads = ''; await loadThreads(); toast('任务列表已刷新'); });
+  $('sidebar-open').addEventListener('click', () => $('workspace').classList.add('sidebar-open'));
+  $('sidebar-close').addEventListener('click', closeSidebar);
+  $('sidebar-shade').addEventListener('click', closeSidebar);
+  $('composer').addEventListener('submit', sendPrompt);
+  $('prompt').addEventListener('input', resizePrompt);
+  $('prompt').addEventListener('keydown', (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } });
+  $('stop-turn').addEventListener('click', stopTurn);
+  $('logout').addEventListener('click', async () => {
+    try { await api('/api/logout', { method: 'POST', body: {} }); state.shownReady = false; resetConversation(); await bootstrap(); }
+    catch (error) { toast(error.message); }
+  });
+  document.querySelectorAll('[data-prompt]').forEach((button) => button.addEventListener('click', () => { $('prompt').value = button.dataset.prompt; resizePrompt(); $('prompt').focus(); }));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { bootstrap(); loadThreads(); loadThread(); } });
+  window.addEventListener('online', () => { bootstrap(); loadThread(); });
+  window.addEventListener('offline', () => { state.connected = false; updateStatus(); });
+
+  async function start() {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const owner = params.get('owner');
+    state.pairToken = params.get('pair') || '';
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    const platform = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '我的 iPhone' : /Android/.test(navigator.userAgent) ? '我的安卓手机' : '我的设备';
+    $('device-name').value = platform;
+    if (owner) {
+      try { await api('/api/owner-login', { method: 'POST', body: { token: owner } }); }
+      catch (error) { showAuth('电脑连接未完成', error.message, false, '请使用启动程序新打开的管理页面。'); return; }
+    }
+    await bootstrap();
+    setInterval(() => { if (!document.hidden) bootstrap(); }, 3500);
+    setInterval(() => { if (!document.hidden && ['owner', 'controller'].includes(state.role)) { loadThreads(); if ($('pair-dialog').open) loadDevices(); } }, 5000);
+    setInterval(() => { if (!document.hidden && state.activeId && ['owner', 'controller'].includes(state.role)) loadThread(); }, 1500);
+    setInterval(() => { if ($('pair-dialog').open) { updateCountdown(); loadDevices(); } }, 2000);
+  }
+  start();
+})();

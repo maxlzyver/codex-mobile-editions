@@ -1,0 +1,425 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { EventEmitter } from 'node:events';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { Tasks } from '../lib/tasks.mjs';
+
+const copy = value => structuredClone(value);
+const catalog = [
+  { id: 'picker-alpha', model: 'model-alpha', displayName: 'Alpha', isDefault: true, defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: '' }, { reasoningEffort: 'high', description: '' }] },
+  { id: 'picker-beta', model: 'model-beta', displayName: 'Beta', isDefault: false, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low', description: '' }, { reasoningEffort: 'high', description: '' }] },
+];
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((a, b) => { resolve = a; reject = b; });
+  return { promise, resolve, reject };
+}
+
+class FakeBridge extends EventEmitter {
+  constructor() {
+    super();
+    this.state = { connected: true, mode: 'standalone', error: null };
+    this.calls = [];
+    this.replies = [];
+    this.errors = [];
+    this.threads = new Map();
+    this.handlers = new Map();
+    this.turnNumber = 0;
+  }
+  async start() { this.state.connected = true; this.emit('state', copy(this.state)); }
+  async request(method, params = {}) {
+    this.calls.push({ method, params: copy(params) });
+    if (this.handlers.has(method)) return this.handlers.get(method)(params);
+    if (method === 'model/list') return { data: copy(catalog) };
+    if (method === 'thread/start') {
+      const thread = { id: `mobile-${this.threads.size + 1}`, cwd: params.cwd, updatedAt: Math.floor(Date.now() / 1000), status: { type: 'idle' }, turns: [], model: params.model, reasoningEffort: params.config?.model_reasoning_effort };
+      this.threads.set(thread.id, thread);
+      return { thread: copy(thread) };
+    }
+    if (method === 'thread/list') return { data: copy([...this.threads.values()]) };
+    const thread = this.threads.get(params.threadId);
+    if (!thread) throw new Error('No fake thread');
+    if (method === 'thread/fork') {
+      const fork = { ...copy(thread), id: `mobile-${this.threads.size + 1}`, status: { type: 'idle' }, model: params.model || thread.model, reasoningEffort: params.config?.model_reasoning_effort || thread.reasoningEffort, forkedFromId: thread.id };
+      this.threads.set(fork.id, fork);
+      return { thread: copy(fork), model: fork.model, reasoningEffort: fork.reasoningEffort };
+    }
+    if (method === 'thread/read' || method === 'thread/resume') return { thread: copy(thread) };
+    if (method === 'turn/start') {
+      const turn = { id: `turn-${++this.turnNumber}`, status: 'inProgress', items: [] };
+      thread.model = params.model || thread.model;
+      thread.reasoningEffort = params.effort || thread.reasoningEffort;
+      thread.turns.push(turn); thread.status = { type: 'active' };
+      return { turn: copy(turn) };
+    }
+    if (method === 'turn/steer') return { turnId: params.expectedTurnId };
+    if (method === 'turn/interrupt') { this.finish(params.threadId, 'interrupted'); return {}; }
+    throw new Error(`Unsupported fake RPC: ${method}`);
+  }
+  reply(id, result) { this.replies.push({ id, result: copy(result) }); }
+  replyError(id, message, code = -32601) {
+    assert.equal(typeof message, 'string', 'RPC error.message must be a string');
+    this.errors.push({ id, message, code });
+  }
+  event(method, params) { this.emit('notification', { method, params }); }
+  finish(threadId, status = 'completed', error = null) {
+    const thread = this.threads.get(threadId);
+    const turn = thread.turns.at(-1);
+    turn.status = status; turn.error = error;
+    thread.status = { type: 'idle' };
+    this.event('turn/completed', { threadId, turn: copy(turn) });
+  }
+  item(threadId, item) {
+    const turn = this.threads.get(threadId).turns.at(-1);
+    const index = turn.items.findIndex(v => v.id === item.id);
+    if (index === -1) turn.items.push(copy(item)); else turn.items[index] = copy(item);
+    this.event('item/completed', { threadId, turnId: turn.id, item: copy(item) });
+  }
+}
+
+async function fixture(t) {
+  const work = fileURLToPath(new URL('../../../../../work/', import.meta.url));
+  await mkdir(work, { recursive: true });
+  const directory = await mkdtemp(path.join(work, 'codex-tasks-test-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const bridge = new FakeBridge();
+  const tasks = new Tasks(bridge, directory, directory);
+  return { tasks, bridge, directory };
+}
+
+function approval(bridge, tasks, threadId, method, extra = {}) {
+  const rpcId = `request-${Math.random()}`;
+  bridge.emit('request', { id: rpcId, method, params: { threadId, ...extra } });
+  return { rpcId, pending: [...tasks.approvals.values()].find(value => value.rpcId === rpcId) };
+}
+
+test('create persists ownership, uses workspace permission defaults, and starts the exact prompt', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const result = await tasks.create('  创建一个报告  ');
+  assert.equal(result.thread.readOnly, false);
+  assert.equal(result.thread.status, 'running');
+  const start = bridge.calls.find(call => call.method === 'thread/start');
+  assert.equal(start.params.cwd.toLowerCase(), directory.toLowerCase());
+  assert.equal(start.params.approvalPolicy, 'on-request');
+  assert.equal(start.params.sandbox, 'workspace-write');
+  assert.deepEqual(bridge.calls.find(call => call.method === 'turn/start').params.input, [{ type: 'text', text: '创建一个报告', text_elements: [] }]);
+  const restored = new Tasks(new FakeBridge(), directory, directory);
+  assert(restored.owned.has(result.thread.id));
+  assert.equal((await tasks.list())[0].readOnly, false);
+});
+
+test('streams assistant and command output, steers a running turn, and interrupts it', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('开始工作');
+  bridge.event('item/started', { threadId: thread.id, item: { id: 'assistant-1', type: 'agentMessage', text: '' } });
+  bridge.event('item/agentMessage/delta', { threadId: thread.id, itemId: 'assistant-1', delta: '正在' });
+  bridge.event('item/agentMessage/delta', { threadId: thread.id, itemId: 'assistant-1', delta: '检查' });
+  bridge.event('item/commandExecution/outputDelta', { threadId: thread.id, itemId: 'cmd-1', delta: 'test passed' });
+  const streamed = await tasks.get(thread.id);
+  assert.equal(streamed.thread.messages.find(v => v.id === 'assistant-1').text, '正在检查');
+  assert.equal(streamed.thread.messages.find(v => v.id === 'cmd-1').text, 'test passed');
+  await tasks.send(thread.id, '增加图表');
+  const steer = bridge.calls.find(call => call.method === 'turn/steer');
+  assert.equal(steer.params.expectedTurnId, thread.turnId);
+  assert.equal(steer.params.input[0].text, '增加图表');
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/start').length, 1);
+  await tasks.stop(thread.id);
+  assert.equal(bridge.calls.at(-1).method, 'turn/interrupt');
+  assert.equal(tasks.cache.get(thread.id).status, 'idle');
+  assert.equal(tasks.cache.get(thread.id).turnId, null);
+});
+
+test('completion reconciles durable output, removes approval, and a later message starts a fresh turn', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('先检查');
+  approval(bridge, tasks, thread.id, 'item/fileChange/requestApproval');
+  bridge.item(thread.id, { id: 'final-1', type: 'agentMessage', text: '已完成' });
+  bridge.finish(thread.id);
+  assert.equal(tasks.approvals.size, 0);
+  const finished = await tasks.get(thread.id);
+  assert.equal(finished.thread.status, 'idle');
+  assert.equal(finished.thread.turnId, null);
+  assert.equal(finished.thread.messages[0].text, '已完成');
+  await tasks.send(thread.id, '继续下一步');
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/start').length, 2);
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/steer').length, 0);
+});
+
+test('desktop running history refreshes after cache expiry and cannot be written', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  bridge.threads.set('desktop', { id: 'desktop', cwd: directory, updatedAt: 1, status: { type: 'notLoaded' }, turns: [{ id: 'desktop-turn', status: 'inProgress', items: [] }] });
+  assert.equal((await tasks.get('desktop')).thread.status, 'running');
+  const stored = bridge.threads.get('desktop');
+  stored.turns[0].status = 'completed';
+  stored.turns[0].items.push({ id: 'new-message', type: 'agentMessage', text: '桌面已完成' });
+  tasks.cache.get('desktop').readAt = Date.now() - 4000;
+  const refreshed = await tasks.get('desktop');
+  assert.equal(refreshed.thread.status, 'idle');
+  assert.equal(refreshed.thread.messages[0].text, '桌面已完成');
+  assert.equal(refreshed.thread.readOnly, true);
+  await assert.rejects(tasks.send('desktop', '执行操作'), { status: 403 });
+  await assert.rejects(tasks.stop('desktop'), { status: 403 });
+  assert(bridge.calls.every(call => call.method === 'thread/read'));
+});
+
+test('command and file approvals accept only one-off explicit decisions', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  for (const method of ['item/commandExecution/requestApproval', 'item/fileChange/requestApproval']) {
+    for (const decision of ['accept', 'decline']) {
+      const { rpcId, pending } = approval(bridge, tasks, thread.id, method);
+      assert.throws(() => tasks.answer(pending.id, { decision: 'acceptForSession' }), { status: 400 });
+      assert.equal(tasks.view(tasks.cache.get(thread.id)).approvals[0].rpcId, undefined);
+      tasks.answer(pending.id, { decision });
+      assert.deepEqual(bridge.replies.at(-1), { id: rpcId, result: { decision } });
+      assert.throws(() => tasks.answer(pending.id, { decision }), { status: 404 });
+    }
+  }
+});
+
+test('permission approvals grant only requested permissions for one turn', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  const permissions = { network: { enabled: true } };
+  const accepted = approval(bridge, tasks, thread.id, 'item/permissions/requestApproval', { permissions });
+  tasks.answer(accepted.pending.id, { decision: 'accept', permissions: { fileSystem: { write: ['C:\\'] } }, scope: 'session' });
+  assert.deepEqual(bridge.replies.at(-1).result, { permissions, scope: 'turn' });
+  const declined = approval(bridge, tasks, thread.id, 'item/permissions/requestApproval', { permissions });
+  tasks.answer(declined.pending.id, { decision: 'decline' });
+  assert.deepEqual(bridge.replies.at(-1).result, { permissions: {}, scope: 'turn' });
+});
+
+test('question responses require every question and preserve protocol answer shape', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  const request = approval(bridge, tasks, thread.id, 'item/tool/requestUserInput', { questions: [{ id: 'format' }, { id: 'audience' }] });
+  assert.throws(() => tasks.answer(request.pending.id, { answers: { format: 'PDF' } }), { status: 400 });
+  tasks.answer(request.pending.id, { answers: { format: 'PDF', audience: { answers: ['同事'] }, unsolicited: 'ignored' } });
+  assert.deepEqual(bridge.replies.at(-1).result, { answers: { format: { answers: ['PDF'] }, audience: { answers: ['同事'] } } });
+});
+
+test('unknown owned requests are rejected; another client requests are untouched; resolved approvals disappear', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  const unknown = approval(bridge, tasks, thread.id, 'item/unknown');
+  assert.equal(unknown.pending, undefined);
+  assert.equal(bridge.errors.at(-1).id, unknown.rpcId);
+  assert.equal(bridge.errors.at(-1).code, -32601);
+  const errors = bridge.errors.length;
+  approval(bridge, tasks, 'desktop-other', 'item/commandExecution/requestApproval');
+  assert.equal(bridge.errors.length, errors);
+  assert.equal(tasks.approvals.size, 0);
+  const pending = approval(bridge, tasks, thread.id, 'item/commandExecution/requestApproval');
+  bridge.event('serverRequest/resolved', { threadId: thread.id, requestId: pending.rpcId });
+  assert.equal(tasks.approvals.size, 0);
+});
+
+test('a concurrent duplicate send is rejected and the lock is released afterward', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  const entered = deferred();
+  const release = deferred();
+  bridge.handlers.set('turn/steer', async () => { entered.resolve(); return release.promise; });
+  const first = tasks.send(thread.id, '第一条');
+  await entered.promise;
+  await assert.rejects(tasks.send(thread.id, '重复提交'), { status: 409 });
+  release.resolve({ turnId: thread.turnId });
+  await first;
+  bridge.handlers.delete('turn/steer');
+  await tasks.send(thread.id, '锁已释放');
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/steer').length, 2);
+});
+
+test('disconnect clears live approvals and a later send resumes the owned task', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  approval(bridge, tasks, thread.id, 'item/fileChange/requestApproval');
+  bridge.state.connected = false;
+  bridge.emit('state', { connected: false, mode: 'standalone' });
+  assert.equal(tasks.approvals.size, 0);
+  assert.equal(tasks.loaded.size, 0);
+  assert.equal(tasks.cache.get(thread.id).status, 'error');
+  bridge.threads.get(thread.id).turns.at(-1).status = 'completed';
+  bridge.threads.get(thread.id).status = { type: 'idle' };
+  tasks.cache.get(thread.id).readAt = 0;
+  await tasks.send(thread.id, '连接恢复后继续');
+  assert(bridge.calls.some(call => call.method === 'thread/resume' && call.params.threadId === thread.id));
+});
+
+test('invalid prompts and nonexistent working directories never create a task', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  for (const prompt of ['', ' ', null, 'x'.repeat(30001)]) await assert.rejects(tasks.create(prompt), { status: 400 });
+  await assert.rejects(tasks.create('工作', 'relative/path'), { status: 400 });
+  await assert.rejects(tasks.create('工作', path.join(directory, 'not-there')), { status: 400 });
+  assert.equal(bridge.calls.length, 0);
+});
+
+test('failed execution surfaces its error and clears the active turn', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  bridge.finish(thread.id, 'failed', { message: '模型连接中断' });
+  const result = await tasks.get(thread.id);
+  assert.equal(result.thread.status, 'error');
+  assert.equal(result.thread.error, '模型连接中断');
+  assert.equal(result.thread.turnId, null);
+});
+
+test('a rejected start releases the send lock and permits a later successful retry', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  bridge.finish(thread.id);
+  await tasks.get(thread.id);
+  bridge.handlers.set('turn/start', async () => { throw new Error('Temporary RPC failure'); });
+  await assert.rejects(tasks.send(thread.id, '第一次重试'), /Temporary RPC failure/);
+  assert.equal(tasks.cache.get(thread.id).status, 'error');
+  assert.equal(tasks.locks.has(thread.id), false);
+  bridge.handlers.delete('turn/start');
+  const retried = await tasks.send(thread.id, '第二次重试');
+  assert.equal(retried.thread.status, 'running');
+});
+
+test('a completion event received before start response cannot revive the completed turn', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  bridge.finish(thread.id);
+  await tasks.get(thread.id);
+  bridge.handlers.set('turn/start', async () => {
+    const turn = { id: 'fast-turn', status: 'completed', items: [] };
+    bridge.threads.get(thread.id).turns.push(turn);
+    bridge.event('turn/completed', { threadId: thread.id, turn });
+    return { turn: { ...turn, status: 'inProgress' } };
+  });
+  const result = await tasks.send(thread.id, '极快完成');
+  assert.equal(result.thread.status, 'idle');
+  assert.equal(result.thread.turnId, null);
+});
+
+test('terminal turn snapshots end running state even without a completion notification', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  bridge.finish(thread.id);
+  await tasks.get(thread.id);
+  for (const status of ['completed', 'interrupted', 'failed']) {
+    bridge.handlers.set('turn/start', async () => {
+      const turn = { id: `instant-${status}`, status, items: [], error: status === 'failed' ? { message: 'Startup failed' } : null };
+      bridge.threads.get(thread.id).turns.push(turn);
+      return { turn };
+    });
+    const result = await tasks.send(thread.id, status);
+    assert.equal(result.thread.status, status === 'failed' ? 'error' : 'idle');
+    assert.equal(result.thread.turnId, null);
+    if (status === 'failed') assert.equal(result.thread.error, 'Startup failed');
+  }
+});
+
+test('selected catalog model and effort reach both thread creation and turn execution', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('选择模型', undefined, { model: 'picker-beta', effort: 'high' });
+  const start = bridge.calls.find(call => call.method === 'thread/start');
+  assert.equal(start.params.model, 'model-beta');
+  assert.deepEqual(start.params.config, { model_reasoning_effort: 'high' });
+  assert.equal(start.params.reasoningEffort, undefined);
+  const turn = bridge.calls.find(call => call.method === 'turn/start');
+  assert.equal(turn.params.model, 'model-beta');
+  assert.equal(turn.params.effort, 'high');
+  assert.equal(turn.params.reasoningEffort, undefined);
+  assert.equal(thread.model, 'model-beta');
+  assert.equal(thread.effort, 'high');
+  assert.equal((await tasks.list())[0].model, 'model-beta');
+  assert.equal(tasks.owned.get(thread.id).effort, 'high');
+});
+
+test('model changes wait for the current turn and are persisted for later turns', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('工作');
+  const previous = bridge.calls.length;
+  await assert.rejects(tasks.send(thread.id, '切换模型', { model: 'picker-beta' }), { status: 409 });
+  assert.equal(bridge.calls.length, previous);
+  assert.equal(tasks.cache.get(thread.id).status, 'running');
+  bridge.finish(thread.id);
+  await tasks.send(thread.id, '换模型继续', { model: 'picker-beta' });
+  assert.equal(bridge.calls.at(-1).params.model, 'model-beta');
+  assert.equal(bridge.calls.at(-1).params.effort, 'low');
+  assert.equal(tasks.owned.get(thread.id).model, 'model-beta');
+  bridge.finish(thread.id);
+  await tasks.send(thread.id, '沿用设置');
+  assert.equal(bridge.calls.at(-1).params.model, 'model-beta');
+  assert.equal(bridge.calls.at(-1).params.effort, 'low');
+});
+
+test('unavailable model and unsupported effort are rejected before creating or starting work', async t => {
+  const { tasks, bridge } = await fixture(t);
+  await assert.rejects(tasks.create('工作', undefined, { model: 'unavailable' }), { status: 400 });
+  await assert.rejects(tasks.create('工作', undefined, { model: 'model-beta', effort: 'medium' }), { status: 400 });
+  assert(bridge.calls.every(call => call.method === 'model/list'));
+  const { thread } = await tasks.create('工作');
+  bridge.finish(thread.id);
+  await assert.rejects(tasks.send(thread.id, '不支持的强度', { effort: 'unavailable' }), { status: 400 });
+  assert.equal(tasks.cache.get(thread.id).status, 'idle');
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/start').length, 1);
+});
+
+test('fork copies full desktop context into a new controllable thread without altering its source', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const source = { id: 'desktop-source', name: '原始桌面任务', cwd: directory, model: 'model-alpha', reasoningEffort: 'high', status: { type: 'notLoaded' }, turns: [{ id: 'old-turn', status: 'completed', items: [{ id: 'old-user', type: 'userMessage', content: [{ type: 'text', text: '原始问题' }] }, { id: 'old-answer', type: 'agentMessage', text: '之前的完整上下文' }] }] };
+  bridge.threads.set(source.id, copy(source));
+  const forked = await tasks.fork(source.id);
+  assert.notEqual(forked.thread.id, source.id);
+  assert.equal(forked.thread.readOnly, false);
+  assert.equal(forked.thread.forkedFromId, source.id);
+  assert.equal(forked.thread.messages[1].text, '之前的完整上下文');
+  assert.equal(forked.thread.model, 'model-alpha');
+  assert.equal(forked.thread.effort, 'high');
+  assert.deepEqual(bridge.threads.get(source.id), source);
+  assert.equal(tasks.owned.has(source.id), false);
+  assert.equal(bridge.calls.some(call => call.method === 'turn/start'), false);
+  const forkCall = bridge.calls.find(call => call.method === 'thread/fork');
+  assert.equal(forkCall.params.deferGoalContinuation, true);
+  assert.equal(forkCall.params.excludeTurns, false);
+  assert.equal(forkCall.params.beforeTurnId, undefined);
+  assert.equal(forkCall.params.sandbox, 'workspace-write');
+  await tasks.send(forked.thread.id, '接着完成');
+  assert.equal(bridge.calls.at(-1).params.threadId, forked.thread.id);
+  await assert.rejects(tasks.send(source.id, '误改原任务'), { status: 403 });
+});
+
+test('fork can start a follow-up using a newly selected model and rejects reused source IDs', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const source = { id: 'desktop', cwd: directory, model: 'model-alpha', reasoningEffort: 'medium', status: { type: 'notLoaded' }, turns: [] };
+  bridge.threads.set(source.id, source);
+  const forked = await tasks.fork(source.id, { prompt: '继续', model: 'picker-beta', effort: 'high' });
+  const start = bridge.calls.find(call => call.method === 'turn/start');
+  assert.equal(start.params.threadId, forked.thread.id);
+  assert.equal(start.params.model, 'model-beta');
+  assert.equal(start.params.effort, 'high');
+  bridge.handlers.set('thread/fork', async () => ({ thread: copy(source) }));
+  await assert.rejects(tasks.fork(source.id), { status: 502 });
+  assert.equal(tasks.owned.has(source.id), false);
+});
+
+test('thread listing walks every page and retains older project directories', async t => {
+  const { tasks, bridge } = await fixture(t);
+  bridge.handlers.set('thread/list', async params => params.cursor
+    ? { data: [{ id: 'older-project', cwd: 'D:\\OlderProject', model: 'model-beta', reasoningEffort: 'low', status: { type: 'notLoaded' } }], nextCursor: null }
+    : { data: [{ id: 'new-project', cwd: 'D:\\NewProject', status: { type: 'notLoaded' } }], nextCursor: 'second-page' });
+  const [a, b] = await Promise.all([tasks.list(), tasks.list()]);
+  assert.equal(a.length, 2);
+  assert.equal(b.length, 2);
+  assert(a.some(thread => thread.cwd === 'D:\\OlderProject'));
+  assert.equal(a.find(thread => thread.id === 'older-project').effort, 'low');
+  assert.equal(bridge.calls.filter(call => call.method === 'thread/list').length, 2);
+});
+
+test('large thread catalogs stop at 5000 and advertise incomplete results', async t => {
+  const { tasks, bridge } = await fixture(t);
+  bridge.handlers.set('thread/list', async params => {
+    const page = Number(params.cursor || 0);
+    return { data: Array.from({ length: 100 }, (_, index) => ({ id: `thread-${page * 100 + index}`, cwd: `D:\\Project${page}`, status: { type: 'notLoaded' } })), nextCursor: String(page + 1) };
+  });
+  assert.equal((await tasks.list()).length, 5000);
+  assert.equal(tasks.listComplete, false);
+  assert.equal(tasks.listNextCursor, '50');
+  assert.equal(bridge.calls.length, 50);
+});

@@ -1,0 +1,41 @@
+name: Verify dedicated editions
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: ${{ matrix.edition }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - edition: windows11
+            os: windows-latest
+          - edition: windows10
+            os: windows-latest
+          - edition: macos
+            os: macos-15
+          - edition: macos
+            os: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.19.0'
+      - name: Verify platform identity and update file hashes
+        run: python tools/verify-editions.py --edition ${{ matrix.edition }}
+      - name: Run protocol, file access and update tests
+        working-directory: editions/${{ matrix.edition }}
+        run: node --test test/*.test.mjs
+      - name: Check macOS launch scripts
+        if: matrix.edition == 'macos'
+        run: |
+          find editions/macos -name '*.command' -print0 | xargs -0 -n1 /bin/bash -n
+      - name: Compile Windows launcher
+        if: matrix.edition != 'macos'
+        working-directory: editions/${{ matrix.edition }}
+        shell: powershell
+        run: .\build-launcher.ps1

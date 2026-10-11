@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7fb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Codex 移动助手 · macOS 专用版">
+  <meta name="referrer" content="no-referrer">
+  <title>Codex 移动助手 · macOS 专用版</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/settings.css">
+  <script src="/settings.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div id="app" class="app-shell" data-role="loading">
+    <header class="topbar">
+      <div class="brand"><img src="/icon.svg" width="36" height="36" alt=""><div>Codex <span class="brand-light">移动助手</span><small>macOS 专用版 · V1.0</small></div></div>
+      <div class="topbar-actions"><span id="connection-status" class="connection-badge"><i></i><span>正在连接</span></span><button id="reconnect" class="button button-quiet owner-only hidden" type="button" title="重新连接 Codex" aria-label="重新连接 Codex"><span class="icon" data-icon="refresh"></span><span>重新连接</span></button><button id="pair-open" class="button button-quiet owner-only" type="button" aria-label="连接手机"><span class="icon" data-icon="phone"></span><span>连接手机</span></button><button id="settings-open" class="button button-quiet" type="button" aria-label="设置与使用说明" title="设置与使用说明"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.5 2-2 1.2-2-.5-2 3.4L4 10.5v2.9l-1.5 1.5 2 3.4 2-.5 2 1.2.5 2h4l.5-2 2-1.2 2 .5 2-3.4-1.5-1.5v-2.9L20 9.1l-2-3.4-2 .5L14 5l-.5-2z"/><circle cx="11.7" cy="12" r="3"/></svg></span><span>设置</span></button><button id="logout" class="icon-button controller-only" type="button" title="断开此设备" aria-label="断开此设备"><span class="icon" data-icon="logout"></span></button></div>
+    </header>
+
+    <main id="auth-view" class="auth-view">
+      <div class="auth-card"><div class="auth-symbol"><span class="icon" data-icon="phone"></span></div><span class="eyebrow">CODEX · 随时随地</span><h1 id="auth-title">正在连接你的工作空间</h1><p id="auth-description">你的电脑负责执行，你可以在这里查看结果、继续工作。</p><div id="auth-progress" class="loading-dots" aria-label="正在加载"><i></i><i></i><i></i></div><form id="pair-form" class="hidden"><label for="device-name">给这台设备起个名字</label><input id="device-name" name="name" maxlength="60" placeholder="例如：我的 iPhone" autocomplete="off" required><button class="button button-primary" type="submit">连接到我的电脑 <span aria-hidden="true">→</span></button></form><p id="auth-note" class="caption"></p></div>
+    </main>
+
+    <div id="workspace" class="workspace hidden">
+      <button id="sidebar-shade" class="sidebar-shade" aria-label="收起会话列表" type="button"></button>
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-top"><span class="eyebrow">工作空间</span><button id="sidebar-close" class="icon-button mobile-only" aria-label="收起会话列表" type="button"><span class="icon" data-icon="close"></span></button></div>
+        <button id="new-thread" class="button new-thread" type="button"><span class="icon" data-icon="plus"></span>新建任务<span class="new-key">＋</span></button>
+        <button id="projects-open" class="button new-thread" type="button"><span class="icon" data-icon="folder"></span>电脑项目与文件</button>
+        <div class="section-label"><span>最近的任务</span><button id="refresh-threads" class="icon-button" title="刷新任务" aria-label="刷新任务" type="button"><span class="icon" data-icon="refresh"></span></button></div>
+        <nav id="thread-list" class="thread-list" aria-label="任务列表"><p class="list-empty">还没有任务，开始第一段工作吧。</p></nav>
+        <div class="sidebar-footer"><div class="computer-icon"><span class="icon" data-icon="computer"></span></div><div><strong id="computer-name">我的电脑</strong><span id="codex-state">正在检查 Codex</span></div><i class="online-dot"></i></div>
+      </aside>
+
+      <section id="chat-panel" class="main-panel">
+        <div class="conversation-topbar"><div class="conversation-heading"><button id="sidebar-open" class="icon-button mobile-only" aria-label="打开任务列表" type="button"><span class="icon" data-icon="menu"></span></button><span id="thread-title">新的开始</span><span id="thread-state" class="thread-state hidden"></span></div><button id="mobile-new" class="icon-button mobile-only" aria-label="新建任务" type="button"><span class="icon" data-icon="plus"></span></button><span class="desktop-only subtle">每一步，都在你的电脑上完成</span></div>
+        <div id="thread-context" class="thread-context"><span id="thread-cwd">请选择工作项目</span><button id="thread-files" class="text-button" type="button">查看文件</button></div>
+        <div id="history-notice" class="history-notice hidden"><span id="history-description">这是桌面 Codex 的保存记录。可以查看最新结果，或保留上下文在同一项目中继续一个分支。</span><button id="fork-thread" class="button" type="button">在此继续分支</button></div>
+        <div id="conversation-scroll" class="conversation-scroll">
+          <section id="welcome" class="welcome">
+            <div class="welcome-mark"><span class="icon" data-icon="sparkles"></span></div><div class="eyebrow">把工作带在身边</div><h1>电脑执行，<br class="mobile-only">手机掌控。</h1><p>查看进度、继续对话、发出下一条指令。<br>你熟悉的 Codex，现在随时可达。</p>
+            <button id="welcome-pair" class="button button-primary owner-only" type="button"><span class="icon" data-icon="phone"></span>连接我的手机<span aria-hidden="true">↗</span></button>
+            <div class="welcome-prompts"><button type="button" data-prompt="帮我查看当前工作目录，概括有哪些项目和文件。"><span class="icon" data-icon="folder"></span><strong>了解当前项目</strong><span>快速熟悉文件与目录 <span aria-hidden="true">↗</span></span></button><button type="button" data-prompt="检查当前项目的状态，告诉我接下来最值得处理的工作。"><span class="icon" data-icon="activity"></span><strong>检查工作进展</strong><span>明确接下来的一步 <span aria-hidden="true">↗</span></span></button></div>
+          </section>
+          <div id="messages" class="messages" aria-live="polite" aria-relevant="additions text"></div>
+          <div id="approvals" class="approvals"></div>
+        </div>
+        <div id="error-banner" class="error-banner hidden" role="alert"></div>
+        <footer class="composer-area"><div class="task-settings"><label class="selection-chip project-chip"><span class="chip-label"><span class="icon" data-icon="folder"></span>项目</span><select id="project-select" aria-label="工作项目"><option value="">默认项目</option></select></label><label class="selection-chip model-chip"><span class="chip-label"><span class="icon" data-icon="sparkles"></span>模型</span><select id="model-select" aria-label="调用模型"><option value="">正在加载模型…</option></select></label><label class="selection-chip effort-chip"><span class="chip-label">思考</span><select id="effort-select" aria-label="思考强度"><option value="">默认</option></select></label><button id="refresh-models" class="icon-button" type="button" title="刷新可用模型" aria-label="刷新可用模型"><span class="icon" data-icon="refresh"></span></button></div><form id="composer" class="composer"><label class="sr-only" for="prompt">给 Codex 的指令</label><textarea id="prompt" rows="1" maxlength="30000" placeholder="描述你想做的事…" aria-label="给 Codex 的指令"></textarea><div class="composer-bottom"><div class="composer-mode"><span class="mode-dot"></span><span id="active-model">Codex · 本地工作</span></div><div class="composer-actions"><button id="stop-turn" class="button button-stop hidden" type="button"><span class="stop-square"></span>停止</button><button id="send" class="send-button" type="submit" title="发送指令（Ctrl + Enter）" aria-label="发送指令"><span class="icon" data-icon="arrow-up"></span></button></div></div></form><p id="composer-hint" class="composer-hint">任务在电脑上执行 · 需要确认的操作会在对话中提示</p></footer>
+      </section>
+      <section id="files-panel" class="main-panel hidden">
+        <div class="conversation-topbar"><div class="conversation-heading"><button id="files-sidebar" class="icon-button mobile-only" type="button" aria-label="打开导航"><span class="icon" data-icon="menu"></span></button><strong>电脑项目</strong></div><button id="files-back-chat" class="button" type="button">返回对话</button></div>
+        <div class="files-scroll"><p class="files-note">直接查看电脑上的当前文件。执行任务后刷新，即可查看和下载新产物。</p><div class="files-controls"><select id="files-project" aria-label="浏览的项目"></select><button id="files-refresh" class="button" type="button">刷新</button></div><form id="add-project-form" class="add-project owner-only"><input id="add-project-path" placeholder="添加其他项目，例如 /Users/yourname/Projects/MyApp" aria-label="本机项目目录"><button class="button" type="submit">添加目录</button></form><div id="files-project-path" class="files-project-path"></div><nav id="file-breadcrumbs" class="file-breadcrumbs" aria-label="文件路径"></nav><div class="file-toolbar"><strong id="file-count"></strong><button id="project-task" class="button button-primary" type="button">在此项目下达指令</button></div><div id="file-list" class="file-list"></div><p id="files-error" class="files-error" role="alert"></p></div>
+      </section>
+    </div>
+  </div>
+
+  <dialog id="pair-dialog" class="pair-dialog" aria-labelledby="pair-title">
+    <div class="dialog-heading"><div class="dialog-brand"><img src="/icon.svg" width="26" height="26" alt="">Codex 移动助手</div><button id="pair-close" class="icon-button" type="button" aria-label="关闭连接窗口"><span class="icon" data-icon="close"></span></button></div>
+    <div class="pair-layout"><section class="pair-intro"><div class="eyebrow">连接移动设备</div><h2 id="pair-title">工作在电脑，<br>自由在手边。</h2><p>用手机浏览器扫码连接，<br>让每一段工作自然延续。</p><ol class="pair-steps"><li><span>1</span><div><strong>选择连接方式</strong><p>同一 Wi-Fi，或通过互联网连接。</p></div></li><li><span>2</span><div><strong>用手机扫描二维码</strong><p>打开链接，为你的手机命名。</p></div></li><li><span>3</span><div><strong>在这里确认设备</strong><p>确认后即可查看任务并发送指令。</p></div></li></ol><div class="pair-tip"><span class="icon" data-icon="shield"></span><span>一次性配对 · 设备可随时撤销<br>连接期间请保持电脑开机联网。</span></div></section>
+      <section class="pair-content"><div class="segmented-control" role="tablist" aria-label="连接方式"><button id="mode-lan" class="active" role="tab" aria-selected="true" data-mode="lan" type="button"><span class="icon" data-icon="wifi"></span>Wi-Fi 连接</button><button id="mode-internet" role="tab" aria-selected="false" data-mode="internet" type="button"><span class="icon" data-icon="globe"></span>互联网连接</button></div><p id="pair-mode-description" class="pair-mode-description">手机与电脑连接同一个 Wi-Fi 后扫码。</p><div id="qr-wrap" class="qr-wrap"><img id="pair-qr" class="hidden" alt="使用手机相机扫描此二维码进行配对"><div id="qr-placeholder"><span class="icon" data-icon="qr"></span><p>正在生成连接码</p></div></div><div id="pair-countdown" class="pair-countdown">二维码只在本次配对期间有效</div><div class="pair-url-row"><input id="pair-url" readonly aria-label="手机连接地址" placeholder="正在准备连接地址"><button id="copy-pair-url" class="icon-button" type="button" aria-label="复制连接地址" title="复制连接地址"><span class="icon" data-icon="copy"></span></button></div><button id="refresh-pair" class="text-button" type="button"><span class="icon" data-icon="refresh"></span>刷新二维码</button><div id="internet-note" class="internet-note hidden"></div><section class="devices-section"><div class="section-label"><span>已连接与待确认设备</span><span id="device-count" class="count">0</span></div><div id="device-list" class="device-list"><p class="list-empty">扫码后，你的设备会显示在这里。</p></div></section></section></div>
+  </dialog>
+  <dialog id="preview-dialog" class="preview-dialog" aria-labelledby="preview-title"><div class="dialog-heading"><strong id="preview-title">文件预览</strong><div class="preview-actions"><a id="preview-download" class="button button-primary" download>下载文件</a><button id="preview-close" class="icon-button" type="button" aria-label="关闭预览"><span class="icon" data-icon="close"></span></button></div></div><div id="preview-content" class="preview-content"></div></dialog>
+  <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title">
+    <header class="settings-heading"><div><span class="settings-overline">macOS 专用版 · V1.0</span><h2 id="settings-title">按你的习惯来</h2></div><button id="settings-close" class="icon-button settings-close" type="button" aria-label="关闭设置">×</button></header>
+    <nav class="settings-tabs" role="tablist" aria-label="设置分类"><button id="settings-tab-appearance" role="tab" aria-selected="true" aria-controls="settings-appearance" tabindex="0" type="button">外观</button><button id="settings-tab-help" role="tab" aria-selected="false" aria-controls="settings-help" tabindex="-1" type="button">使用说明</button><button id="settings-tab-about" role="tab" aria-selected="false" aria-controls="settings-about" tabindex="-1" type="button">更新与关于</button></nav>
+    <div class="settings-body">
+      <section id="settings-appearance" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-appearance">
+        <div class="settings-section-heading"><div><h3>舒服的配色</h3><p>更改会立即生效，仅保存在当前浏览器。</p></div><button id="appearance-reset" class="text-button" type="button">恢复默认</button></div>
+        <div id="theme-options" class="theme-options" role="group" aria-label="颜色主题"><button type="button" data-theme-choice="blue" aria-pressed="true"><span class="theme-swatch swatch-blue"></span>晴空蓝</button><button type="button" data-theme-choice="sage" aria-pressed="false"><span class="theme-swatch swatch-sage"></span>鼠尾草</button><button type="button" data-theme-choice="violet" aria-pressed="false"><span class="theme-swatch swatch-violet"></span>鸢尾紫</button><button type="button" data-theme-choice="rose" aria-pressed="false"><span class="theme-swatch swatch-rose"></span>蔷薇粉</button><button type="button" data-theme-choice="dark" aria-pressed="false"><span class="theme-swatch swatch-dark"></span>深夜</button></div>
+        <div class="settings-color-grid"><label class="settings-field color-field" for="appearance-accent"><span>自定义主色<small>按钮、选中状态与强调色</small></span><input id="appearance-accent" type="color" value="#3565e8" aria-label="自定义主色"></label><label class="settings-field color-field" for="appearance-text"><span>文字颜色<small>对话与界面的主要文字</small></span><input id="appearance-text" type="color" value="#202c40" aria-label="文字颜色"></label></div>
+        <div class="settings-divider"></div>
+        <div class="settings-section-heading"><div><h3>清晰的阅读体验</h3><p>选择适合你的字体和大小。</p></div></div>
+        <label class="settings-field" for="appearance-font"><span>字体种类</span><select id="appearance-font"><option value="system">系统默认 · 清晰易读</option><option value="yahei">微软雅黑</option><option value="pingfang">苹方</option><option value="segoe">Segoe UI</option><option value="serif">宋体 / 衬线</option><option value="mono">等宽字体</option></select></label>
+        <label class="settings-field size-field" for="appearance-size"><span>字体大小<output id="appearance-size-value" for="appearance-size">16 px</output></span><div class="size-control"><span aria-hidden="true">A</span><input id="appearance-size" type="range" min="14" max="22" step="1" value="16"><span aria-hidden="true">A</span></div></label>
+        <div class="appearance-preview"><span class="preview-kicker">实时预览</span><strong>工作在电脑，自由在手边。</strong><p>查看项目进展，继续同一个聊天。<br>你的下一条想法，随时可以开始。</p><span class="preview-pill">Codex 移动助手</span></div>
+        <p id="appearance-feedback" class="settings-footnote" role="status">外观偏好不会改变电脑 Codex 的设置。</p>
+      </section>
+      <section id="settings-help" class="settings-panel hidden" role="tabpanel" aria-labelledby="settings-tab-help">
+        <div class="settings-section-heading"><div><h3>从电脑到手机，只需三步</h3><p>电脑是执行端，手机浏览器是你的控制台。</p></div></div>
+        <ol class="help-steps"><li><span>1</span><div><h4>在 Mac 电脑上启动</h4><p>打开并登录 Codex 桌面端，再启动 macOS 专用版移动助手，选择工作目录。使用期间保持电脑开机、联网。</p></div></li><li><span>2</span><div><h4>连接手机，并在电脑上确认</h4><p>点击「连接手机」。同一网络选择 Wi-Fi；其他网络选择互联网。手机扫码、填写设备名称后，在电脑端批准该设备。</p></div></li><li><span>3</span><div><h4>选聊天，发指令，看结果</h4><p>从任务列表打开聊天，选择模型与思考强度，发送指令。「电脑项目与文件」可浏览、预览和下载工作成果。</p></div></li></ol>
+        <div class="help-note"><strong>同一个聊天，取决于连接方式</strong><p>连接桌面端后，可在手机继续受支持的桌面聊天。若界面提示独立模式，请按当前聊天的能力提示操作；部分审批、停止及桌面专有功能仍需回电脑完成。</p></div>
+        <h3 class="help-title">和直接使用 ChatGPT App 有什么区别？</h3>
+        <div class="comparison-cards"><article><span class="comparison-label">官方入口</span><h4>ChatGPT App</h4><p>OpenAI 官方聊天与 Codex 入口。官方移动端也支持连接 Mac / Windows 电脑使用 Codex；可用性取决于功能推送、账户与工作区设置。</p><a href="https://learn.chatgpt.com/docs/mobile" target="_blank" rel="noopener noreferrer">查看官方移动端说明 ↗</a></article><article><span class="comparison-label">当前工具</span><h4>Codex 移动助手</h4><p>由 maxlzyver 开发的自托管工具，在 Mac 电脑运行，通过手机浏览器连接。提供本地项目文件预览与下载，以及独立的主题、字号和字体设置。</p><p class="settings-footnote">独立社区项目，与 OpenAI 无官方隶属关系。</p></article></div>
+        <h3 class="help-title">常见问题</h3><details class="help-detail"><summary>手机连不上，先检查什么？</summary><p>确认电脑和移动助手正在运行，Wi-Fi 模式下两台设备应处于同一局域网。二维码过期后在电脑刷新；换网络可使用互联网模式。设备被撤销后需要重新配对。</p></details><details class="help-detail"><summary>为什么模型列表或功能与桌面不同？</summary><p>模型列表由当前 Codex 连接返回，并受到版本、账户与当前聊天的支持能力影响。可点击模型区域的刷新按钮重载。界面会标明当前聊天可用的操作。</p></details><details class="help-detail"><summary>自动更新会中断正在执行的任务吗？</summary><p>更新由电脑端管理。自动更新会等待任务空闲后应用；安装期间网页可能短暂断开，完成后刷新页面。也可以关闭自动更新，手动检查和安装。本版仅从 GitHub 的 editions/macos 目录检查更新，不会安装其他平台的版本。</p></details>
+      </section>
+      <section id="settings-about" class="settings-panel hidden" role="tabpanel" aria-labelledby="settings-tab-about">
+        <div class="about-brand"><img src="/icon.svg" width="54" height="54" alt=""><div><h3>Codex 移动助手</h3><p>macOS 专用版<span id="about-version" class="version-pill">v1.0.0</span></p></div></div>
+        <section class="update-card" aria-labelledby="update-title"><div class="update-heading"><div><h4 id="update-title">软件更新</h4><p id="update-status" role="status" aria-live="polite">打开此面板后检查更新状态</p></div><span id="update-indicator" class="update-indicator" aria-hidden="true"></span></div><progress id="update-progress" class="hidden" max="100" value="0" aria-label="更新下载进度"></progress><p id="update-detail" class="settings-footnote"></p><div class="update-actions"><button id="update-check" class="button" type="button">检查更新</button><button id="update-install" class="button button-primary hidden" type="button">安装更新</button><a id="update-release" class="settings-link hidden" href="https://github.com/maxlzyver/codex-mobile-editions/releases" target="_blank" rel="noopener noreferrer">发行说明 ↗</a></div><label class="auto-update-setting" for="update-auto"><span><strong>自动更新</strong><small>有新版本时下载，等待任务空闲后应用</small></span><input id="update-auto" type="checkbox" role="switch"></label><p id="update-permission" class="settings-footnote"></p></section>
+        <dl class="about-links"><div><dt>作者</dt><dd><a href="https://github.com/maxlzyver" target="_blank" rel="noopener noreferrer">maxlzyver ↗</a></dd></div><div><dt>项目源码</dt><dd><a href="https://github.com/maxlzyver/codex-mobile-editions" target="_blank" rel="noopener noreferrer">GitHub / codex-mobile-editions ↗</a></dd></div><div><dt>反馈与建议</dt><dd><a href="mailto:lzyuan666666@gmail.com">lzyuan666666@gmail.com ↗</a></dd></div></dl>
+        <section class="support-card" aria-labelledby="support-card-title"><span class="support-heart" aria-hidden="true">♡</span><div><h4 id="support-card-title">请作者喝杯咖啡</h4><p>自愿支持，不影响任何功能使用。</p></div><button id="support-open" class="button" type="button" aria-haspopup="dialog">赞助一下 <span aria-hidden="true">↗</span></button></section>
+        <p class="settings-footnote about-note">适用于 macOS 14+ · Apple 芯片 / Intel · 手机端使用浏览器<br>外观设置仅保存在当前浏览器；更新设置由这台电脑管理。</p>
+      </section>
+    </div>
+  </dialog>
+  <dialog id="support-dialog" class="support-dialog" aria-labelledby="support-title" aria-describedby="support-description">
+    <header class="support-heading"><div><span class="settings-overline">支持 maxlzyver</span><h2 id="support-title">赞助一下</h2></div><button id="support-close" class="icon-button settings-close" type="button" aria-label="关闭支持窗口">×</button></header>
+    <div class="support-body"><p id="support-description">自愿支持，不影响任何功能使用。</p><img id="support-image" src="/support-wechat.jpg" width="828" height="1124" alt="maxlzyver 提供的微信收款码原图" loading="lazy"><p class="settings-footnote support-instructions">保存图片后，在微信「扫一扫」中选择相册识别。若浏览器未保存，可打开原图并长按保存。</p></div>
+    <footer class="support-actions"><a id="support-original" class="button" href="/support-wechat.jpg" target="_blank" rel="noopener noreferrer">打开原图 ↗</a><a id="support-download" class="button button-primary" href="/support-wechat.jpg" download="maxlzyver-微信收款码.jpg">保存收款码</a></footer>
+  </dialog>
+  <div id="toast" class="toast hidden" role="status"></div>
+</body>
+</html>

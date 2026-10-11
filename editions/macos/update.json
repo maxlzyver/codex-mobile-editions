@@ -1,0 +1,235 @@
+{
+  "edition": "macos",
+  "files": [
+    {
+      "bytes": 1096,
+      "path": "LICENSE",
+      "sha256": "e2209eb3b875828941f295214883c3e581c76a393125541384a2b8572287f002"
+    },
+    {
+      "bytes": 248,
+      "path": "Login.command",
+      "sha256": "2ae4212406f699b8574cf7c4fb6bf152ef306224b8d03027c9bc1343f507f827"
+    },
+    {
+      "bytes": 5715,
+      "path": "README.md",
+      "sha256": "ccc6d747ee5faf19ef19b7d6a51e9bbc594e078c2f680524946f773996e38812"
+    },
+    {
+      "bytes": 456,
+      "path": "Start.command",
+      "sha256": "f985332cf65ab75b3dca77e03e3904c9b162cb54e04c9b55c61ae716cd68347a"
+    },
+    {
+      "bytes": 247,
+      "path": "Stop.command",
+      "sha256": "f611a23c68d229e41e1ea3b14faa69343e1bb8b2dc5e84e3f0b3192a424d5033"
+    },
+    {
+      "bytes": 1327,
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "db397a756ef342220de93de98ca44f4acbe82375ff27a911409e227e30428fbc"
+    },
+    {
+      "bytes": 1811,
+      "path": "docs/COMPATIBILITY.md",
+      "sha256": "fbf48801da5fad27ade871c97f5543e595c98065048e8426142106391f397e4f"
+    },
+    {
+      "bytes": 1473,
+      "path": "docs/RELEASING.md",
+      "sha256": "9cc8e64d0912b92bf1740be6fc900b64ceaf3c37d836d422e498a4fafe9d7f75"
+    },
+    {
+      "bytes": 254,
+      "path": "edition.json",
+      "sha256": "ac4e6022fb975713082cdbc83e653c3dc8d7b088650ce4631d953fb4b1a518cf"
+    },
+    {
+      "bytes": 541,
+      "path": "lib/app-info.mjs",
+      "sha256": "a8bec57ee072a796eec8d31de80bafe067388288f5fe25af06366d9c7eeb5f89"
+    },
+    {
+      "bytes": 10866,
+      "path": "lib/codex-bridge.mjs",
+      "sha256": "209eac488a19c035296af1fb57168b3d68ba5a9d3265ff345c94064cfe6ee952"
+    },
+    {
+      "bytes": 11283,
+      "path": "lib/desktop-bridge.mjs",
+      "sha256": "bc42cc5d51249f72efa7ee30ae59fe6c2e702a9c88eb9e7367a4e52b65117a29"
+    },
+    {
+      "bytes": 14339,
+      "path": "lib/desktop-tasks.mjs",
+      "sha256": "effcff7f23fcdc8013afb013c70def3a687c539f9bd8f5afcff82da4a4242c92"
+    },
+    {
+      "bytes": 15647,
+      "path": "lib/files.mjs",
+      "sha256": "dee2c77d59ce5176af4b572e88d794d78fe95fe38e22e562f62e1dd6f3a91943"
+    },
+    {
+      "bytes": 9294,
+      "path": "lib/mac-launcher.mjs",
+      "sha256": "fcd1eba983745697d3b9b3fc6b6f3c28267bb6dce67921dc19fe8f6eff0f5139"
+    },
+    {
+      "bytes": 4070,
+      "path": "lib/models.mjs",
+      "sha256": "479eddcf4b78fc11c1e1d297b29cba9a5a751e391c46c6a3bffb62506e2689fb"
+    },
+    {
+      "bytes": 3674,
+      "path": "lib/security.mjs",
+      "sha256": "31b378b01796e67a30602a926483c89fc50589a4809ec07f05cf848517d72626"
+    },
+    {
+      "bytes": 15490,
+      "path": "lib/tasks.mjs",
+      "sha256": "016b73c5a70a51d6068ba919299dcd7e3b7862762fd49d2f5571f4c119ee3a56"
+    },
+    {
+      "bytes": 15907,
+      "path": "lib/tunnel.mjs",
+      "sha256": "387cfb45bed221ae112327c12b2a398a533ae13bd814b34964c56d164294a8d1"
+    },
+    {
+      "bytes": 4905,
+      "path": "lib/update-installer.mjs",
+      "sha256": "4e26894ff8051a2f1dae8bb36b24357d8853e8a3ac1027198dff73ebcc904d93"
+    },
+    {
+      "bytes": 25480,
+      "path": "lib/updater.mjs",
+      "sha256": "a38e3e8a1cca29e2c9b0ea7a400e63c6ca94c6e448101036ee15452e82bddd55"
+    },
+    {
+      "bytes": 576,
+      "path": "package.json",
+      "sha256": "2065652a759f4d2fbbbbae048876c758f013ec9267d68241b46da1823f36a487"
+    },
+    {
+      "bytes": 46033,
+      "path": "public/app.js",
+      "sha256": "8a79045e3bf3a312797204a19e74fd3b36d9caa30130c2c5164481ccc218b235"
+    },
+    {
+      "bytes": 517,
+      "path": "public/icon.svg",
+      "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
+    },
+    {
+      "bytes": 24667,
+      "path": "public/index.html",
+      "sha256": "45b08ee3fab308a198a792760e18158a9275de0d8b41e2bff8a8238b2b343d46"
+    },
+    {
+      "bytes": 409,
+      "path": "public/manifest.webmanifest",
+      "sha256": "05707e1674d43d80729035f57285a2139266d216a17bba2f0eb5d0edd6f8cffb"
+    },
+    {
+      "bytes": 14670,
+      "path": "public/settings.css",
+      "sha256": "e715bc0a5fafb2744528be8affc96153bac8df6084dbcc67110ac3a1c43b8c09"
+    },
+    {
+      "bytes": 15450,
+      "path": "public/settings.js",
+      "sha256": "1a02eabf6f7131b492fd58103ac3356a840f450485690abc5e10dd8dd4d95486"
+    },
+    {
+      "bytes": 29743,
+      "path": "public/styles.css",
+      "sha256": "5b0833c165e1628a9821ee246b0605ec16b608ff4cd5aad32b22691120de1840"
+    },
+    {
+      "bytes": 121660,
+      "path": "public/support-wechat.jpg",
+      "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
+    },
+    {
+      "bytes": 22104,
+      "path": "server.mjs",
+      "sha256": "30fc685a76c28f5368d997d9d5d850927dc18a9f749b3a18f0c961a1a206692d"
+    },
+    {
+      "bytes": 6545,
+      "path": "test/bridge.test.mjs",
+      "sha256": "cd31fa600c794d381a7ef64e7b563e20d9d6f9cbfe1e6681317cd0456fedcffd"
+    },
+    {
+      "bytes": 7866,
+      "path": "test/desktop-bridge.test.mjs",
+      "sha256": "4f768804074285e7b7291137a9676a982cf4e8f2588793369c34b95362a7a3c9"
+    },
+    {
+      "bytes": 14594,
+      "path": "test/desktop-tasks.test.mjs",
+      "sha256": "697270934a9767772112c97cbf74fe13bbf8ef3fec4e1a1aae80e53cb60c4adf"
+    },
+    {
+      "bytes": 10194,
+      "path": "test/files.test.mjs",
+      "sha256": "da9db672bcf6bb56a86f3bcc5fea83e9adf24c1159b426245ca7100696f7061a"
+    },
+    {
+      "bytes": 1976,
+      "path": "test/mac-platform.test.mjs",
+      "sha256": "60053e53d93c4e2054e1300bbcdb3aa2d14809846917711cbe7dfc111dc3062a"
+    },
+    {
+      "bytes": 4636,
+      "path": "test/models.test.mjs",
+      "sha256": "8fca75644ffb21bce0966d1a92f8aad33874e6d4952d64073d18c45c5b2b0d49"
+    },
+    {
+      "bytes": 30779,
+      "path": "test/server.test.mjs",
+      "sha256": "33f9bda1faac38c5e8c64b4164674cf0bdf1ce9c19de1f4acbdeacd3913ac258"
+    },
+    {
+      "bytes": 24019,
+      "path": "test/tasks.test.mjs",
+      "sha256": "2231b40c91a9b11f92464e8fafe94fe5857fc000b71c44f47f4672e11e885894"
+    },
+    {
+      "bytes": 5001,
+      "path": "test/tunnel.test.mjs",
+      "sha256": "044a2ef87175ac6d1f94f838a3cced732b79c759492a7e5b40e3c8b0b17fc725"
+    },
+    {
+      "bytes": 14451,
+      "path": "test/update-installer.test.mjs",
+      "sha256": "d8c59773a70ad38a573fd4b949380de5e1469f7c5f969b990af30fb9c11c9b88"
+    },
+    {
+      "bytes": 22177,
+      "path": "test/updater.test.mjs",
+      "sha256": "314eaf55c2833654d8b5da35823c9021fde97a61cbb23e30fd5ca19b08efaf7a"
+    },
+    {
+      "bytes": 23634,
+      "path": "tools/apply-update.mjs",
+      "sha256": "b86b35e0bd35f9f559521b9d81a13a625841e82a29c7ce7dd60d2d11d373d87f"
+    },
+    {
+      "bytes": 1071,
+      "path": "vendor/qrcode-LICENSE.txt",
+      "sha256": "3a850fa5f08101db6f40676c2786e10bd2cd5fff7b12ffdf1e0c434d4e49d90c"
+    },
+    {
+      "bytes": 56694,
+      "path": "vendor/qrcode.cjs",
+      "sha256": "18ae399f81182bc9de916e9c77b195df20cc58d6f2d55a62b085a299f1bf1780"
+    }
+  ],
+  "name": "Codex 移动助手",
+  "platform": "macOS universal",
+  "repository": "maxlzyver/codex-mobile-editions",
+  "runtimePolicy": "preserve",
+  "version": "1.0.0"
+}

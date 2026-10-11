@@ -1,0 +1,2 @@
+# Keep the exact bytes used by update.json on every checkout platform.
+* -text
