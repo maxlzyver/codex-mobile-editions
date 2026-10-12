@@ -3,6 +3,10 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import { DesktopTasks } from '../lib/desktop-tasks.mjs';
 import { AccessError } from '../lib/security.mjs';
+import { SubmittedMessages } from '../lib/submitted-messages.mjs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 
 const clone = value => structuredClone(value);
 const result = value => ({ success: true, contentItems: [{ type: 'inputText', text: JSON.stringify(value) }] });
@@ -113,6 +117,9 @@ test('native send stays in the selected conversation and omits model settings wh
   assert.deepEqual(write.context, { callerThreadId: 'desktop', hostId: 'local' });
   assert.equal(view.thread.id, 'desktop');
   assert.equal(view.thread.control, 'native');
+  assert.equal(view.accepted, true);
+  assert.equal(view.thread.messages.at(-1).text, 'Continue this exact conversation');
+  assert.equal(view.thread.messages.at(-1).delivery, 'sent');
   assert(!companion.calls.some(call => call.method === 'send' || call.method === 'models.resolve' || call.method === 'create'));
 });
 
@@ -147,6 +154,7 @@ test('native write failure never falls back to CLI and warns about uncertain acc
   assert.equal(native.calls.filter(call => call.tool === 'send_message_to_thread').length, 1);
   assert(!companion.calls.some(call => ['send','create','fork'].includes(call.method)));
   assert.equal(tasks.locks.size, 0);
+  assert.equal(tasks.submitted.records.length, 0);
 });
 
 test('an accepted native write is not reported as failed when its status refresh fails', async () => {
@@ -157,6 +165,8 @@ test('an accepted native write is not reported as failed when its status refresh
   assert.equal(view.accepted, true);
   assert.equal(view.refreshPending, true);
   assert.equal(view.thread.status, 'running');
+  assert.equal(view.thread.messages.at(-1).text, 'Continue');
+  assert.equal(view.thread.messages.at(-1).delivery, 'sent');
   assert(!companion.calls.some(call => call.method === 'send'));
 });
 
@@ -230,4 +240,87 @@ test('native recent turns replace matching saved items while earlier saved resul
   assert.deepEqual(view.thread.messages.map(message => message.text), ['Earlier artifact link', 'Complete live text']);
   assert.equal(view.thread.model, 'model-from-disk');
   assert.equal(view.thread.effort, 'high');
+});
+
+test('accepted native instructions survive reload, service restart and read-only fallback', async t => {
+  const work = fileURLToPath(new URL('../../../work/', import.meta.url));
+  await mkdir(work, { recursive: true });
+  const directory = await mkdtemp(path.join(work, 'native-submissions-test-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const { companion, native } = fixture();
+  companion.submitted = new SubmittedMessages(directory);
+  const tasks = new DesktopTasks(companion, native, { readCacheMs: 0 });
+  const sent = await tasks.send('desktop', 'Phone instruction');
+  const message = sent.thread.messages.find(item => item.text === 'Phone instruction');
+  assert.equal(message.delivery, 'sent');
+  assert.equal((await tasks.get('desktop')).thread.messages.find(item => item.text === 'Phone instruction').id, message.id);
+  companion.submitted = new SubmittedMessages(directory);
+  const restarted = new DesktopTasks(companion, native, { readCacheMs: 0 });
+  assert.equal((await restarted.get('desktop')).thread.messages.find(item => item.text === 'Phone instruction').id, message.id);
+  native.failRead = true;
+  const fallback = await restarted.get('desktop');
+  assert.equal(fallback.thread.readOnly, true);
+  assert.equal(fallback.thread.messages.find(item => item.text === 'Phone instruction').id, message.id);
+});
+
+test('native transcript reconciliation preserves identical sends and public commentary metadata', async () => {
+  const { tasks, native } = fixture();
+  await tasks.send('desktop', 'Again');
+  const second = await tasks.send('desktop', 'Again');
+  const receipts = second.thread.messages.filter(message => message.submitted);
+  assert.equal(receipts.length, 2);
+  native.reads.set('desktop', { thread: local('desktop'), page: { order: 'oldest-first' }, turns: [
+    { id: 'native-turn', status: 'completed', items: [{ id: 'native-message', type: 'agentMessage', text: 'Native result' }] },
+    { id: 'next-turn', status: 'inProgress', items: [
+      { id: 'first-user', type: 'userMessage', content: [{ type: 'text', text: 'Again' }] },
+      { id: 'second-user', type: 'userMessage', content: [{ type: 'text', text: 'Again' }] },
+      { id: 'progress', type: 'agentMessage', phase: 'commentary', text: 'Working now' },
+      { id: 'private', type: 'reasoning', content: ['Never disclose'] },
+    ] },
+  ] });
+  const result = await tasks.get('desktop');
+  assert.deepEqual(result.thread.messages.filter(message => message.role === 'user').map(message => message.id), receipts.map(message => message.id));
+  assert.deepEqual(result.thread.messages.filter(message => message.role === 'user').map(message => message.serverId), ['first-user', 'second-user']);
+  const progress = result.thread.messages.find(message => message.id === 'progress');
+  assert.equal(progress.phase, 'commentary');
+  assert.equal(progress.turnId, 'next-turn');
+  assert(!JSON.stringify(result).includes('Never disclose'));
+});
+
+test('an explicit native non-acceptance never creates a sent receipt', async () => {
+  const { tasks, native } = fixture();
+  native.call = async () => result({ accepted: false });
+  await assert.rejects(tasks.send('desktop', 'Rejected'), { status: 502 });
+  assert.equal(tasks.submitted.records.length, 0);
+});
+
+test('live transcript order wins when saved assistant precedes a newly visible user item', async () => {
+  const { tasks, companion, native } = fixture();
+  companion.get = async id => ({ thread: { id, messages: [
+    { id: 'older', role: 'assistant', text: 'Earlier result' },
+    { id: 'answer', role: 'assistant', text: 'Stale answer' },
+    { id: 'stream-only', role: 'tool', text: 'Saved-only stream' },
+  ] }, approvals: [] });
+  native.reads.set('desktop', { thread: local('desktop'), turns: [{ id: 'turn', status: 'inProgress', items: [
+    { id: 'user', type: 'userMessage', content: [{ type: 'text', text: 'Prompt' }] },
+    { id: 'answer', type: 'agentMessage', text: 'Live answer' },
+  ] }] });
+  const receipt = tasks.submitted.accept(tasks.submitted.begin('desktop', 'Prompt', [{ id: 'older', role: 'assistant', text: 'Earlier result' }]), 'turn');
+  const view = await tasks.get('desktop');
+  assert.deepEqual(view.thread.messages.map(message => message.id), ['older', receipt.id, 'answer', 'stream-only']);
+  assert.equal(view.thread.messages[1].serverId, 'user');
+  assert.equal(view.thread.messages[2].text, 'Live answer');
+});
+
+test('native read failures retain cached-only messages even if the CLI reader also fails', async () => {
+  const { tasks, companion, native } = fixture();
+  await tasks.get('desktop');
+  native.failRead = true;
+  const savedFallback = await tasks.get('desktop');
+  assert(savedFallback.thread.messages.some(message => message.text === 'Native result'));
+  companion.get = async () => { throw new Error('CLI disconnected'); };
+  const cachedFallback = await tasks.get('desktop');
+  assert(cachedFallback.thread.messages.some(message => message.text === 'Native result'));
+  assert.equal(cachedFallback.thread.control, 'readOnly');
+  assert.equal(cachedFallback.thread.capabilities.send, false);
 });

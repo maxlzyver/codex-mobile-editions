@@ -1,13 +1,13 @@
 {
   "name": "codex-mobile-console",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "maxlzyver",
   "homepage": "https://github.com/maxlzyver/codex-mobile-editions",
   "repository": { "type": "git", "url": "https://github.com/maxlzyver/codex-mobile-editions.git" },
   "bugs": { "email": "lzyuan666666@gmail.com" },
   "private": true,
   "type": "module",
-  "description": "Codex 移动助手 · macOS 专用版 V1.0：Apple 芯片与 Intel Mac 的手机浏览器工作台",
+  "description": "Codex 移动助手 · macOS 专用版 V1.0.1：Apple 芯片与 Intel Mac 的手机浏览器工作台",
   "scripts": { "start": "node server.mjs", "test": "node --test test/*.test.mjs" },
   "engines": { "node": ">=24" }
 }

@@ -31,9 +31,10 @@
   document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(...icon(node.dataset.icon).childNodes));
 
   const state = {
+    outgoing: new Map(), outgoingSequence: 0, conversationGeneration: 0, readRevision: 0, lastSubmissionWarning: '',
     role: 'loading', csrf: '', bootstrap: null, activeId: null, threads: [], thread: null,
     pairing: null, pairMode: 'lan', pairingBusy: false, pairToken: '', sending: false,
-    readBusy: false, statusBusy: false, devicesBusy: false, lastMessages: '', lastApprovals: '',
+    readBusy: false, statusBusy: false, devicesBusy: false, lastMessages: '', lastApprovals: '', messageDisclosure: new Map(),
     lastThreads: '', lastDevices: '', lastStatus: '', connected: true, toastTimer: null, authTimer: null,
     wantInternetPair: false, shownReady: false, activeReadOnly: false, lanUrl: '', lastThreadError: '',
     models: [], projects: [], projectId: '', filesProjectId: '', filePath: '', filesGeneration: 0, selectionThread: null, view: 'chat', modelsBusy: false,
@@ -71,6 +72,7 @@
       const detail = typeof data.error === 'string' ? data.error : (data.error?.message || data.message);
       const error = new Error(detail || `请求未完成（${response.status}）`);
       error.status = response.status;
+      error.threadId = data.threadId;
       throw error;
     }
     return data;
@@ -197,6 +199,7 @@
   }
   function closeSidebar() { $('workspace').classList.remove('sidebar-open'); }
   function resetConversation() {
+    state.conversationGeneration++;
     showView('chat');
     state.activeId = null;
     state.thread = null;
@@ -220,7 +223,7 @@
     hidden('error-banner', true);
     $('prompt').disabled = false;
     $('prompt').placeholder = '描述你想做的事…';
-    $('send').disabled = false;
+    $('send').disabled = state.sending;
     renderThreads();
     closeSidebar();
   }
@@ -234,15 +237,18 @@
     await loadThread(true);
   }
   async function loadThread(forceScroll = false) {
-    if (!state.activeId || state.readBusy) return;
+    if (!state.activeId) return;
     const id = state.activeId;
-    state.readBusy = true;
+    const request = { id, generation: state.conversationGeneration, revision: state.readRevision };
+    if (state.readBusy && state.readBusy.id === id && state.readBusy.generation === request.generation && state.readBusy.revision === request.revision) return;
+    state.readBusy = request;
     try {
       const data = await api(`/api/threads/${encodeURIComponent(id)}`);
-      if (id !== state.activeId) return;
+      if (id !== state.activeId || request.generation !== state.conversationGeneration || request.revision !== state.readRevision) return;
       state.thread = data.thread || data;
       const thread = state.thread;
       const running = isRunning(thread);
+      showSubmissionWarning(thread);
       if (thread.error && thread.error !== state.lastThreadError) {
         state.lastThreadError = thread.error;
         showError(new Error(thread.error));
@@ -271,15 +277,7 @@
       $('prompt').placeholder = state.activeReadOnly ? '点上方「在此继续分支」，保留上下文继续工作。' : running ? 'Codex 正在工作，你可以输入下一条指令…' : '描述你想做的事…';
       $('send').disabled = state.activeReadOnly || state.sending;
       hidden('welcome', true);
-      const messages = thread.messages || data.messages || [];
-      const key = JSON.stringify([messages, running]);
-      if (key !== state.lastMessages) {
-        const scroll = $('conversation-scroll');
-        const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 140;
-        state.lastMessages = key;
-        renderMessages(messages, running);
-        if (forceScroll || nearBottom) requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
-      }
+      renderConversation(thread.messages || data.messages || [], running, forceScroll);
       const approvals = data.approvals || thread.approvals || [];
       const approvalKey = JSON.stringify(approvals);
       if (approvalKey !== state.lastApprovals) {
@@ -287,9 +285,35 @@
         renderApprovals(approvals);
       }
     } catch (error) {
+      if (id !== state.activeId || request.generation !== state.conversationGeneration || request.revision !== state.readRevision) return;
       if (forceScroll || (error.status !== 401 && error.status !== 403)) showError(error);
       if (error.status === 401 || error.status === 403) await bootstrap();
-    } finally { state.readBusy = false; }
+    } finally { if (state.readBusy === request) state.readBusy = false; }
+  }
+  function showSubmissionWarning(thread) {
+    const warning = thread?.submissionWarning || '';
+    if (warning && warning !== state.lastSubmissionWarning) showError(new Error(warning));
+    state.lastSubmissionWarning = warning;
+  }
+  function renderConversation(messages, running, forceScroll = false) {
+    const visible = [...messages];
+    const matched = new Set();
+    for (const [key, outgoing] of state.outgoing) {
+      const belongs = outgoing.threadId ? outgoing.threadId === state.activeId : !state.activeId && outgoing.viewGeneration === state.conversationGeneration;
+      if (!belongs) continue;
+      // A later authenticated read can resolve an ambiguous network response.
+      // Existing identical prompts are excluded, so repeated instructions remain distinct.
+      const synced = outgoing.delivery === 'uncertain' && messages.find(message => message.role === 'user' && message.submitted && messageText(message) === outgoing.text && !outgoing.baselineIds.has(message.id) && !matched.has(message.id));
+      if (synced) { matched.add(synced.id); state.outgoing.delete(key); continue; }
+      visible.push({ id: outgoing.id, role: 'user', text: outgoing.text, createdAt: outgoing.createdAt, delivery: outgoing.delivery });
+    }
+    const key = JSON.stringify([state.activeId, visible, running]);
+    if (key === state.lastMessages && !forceScroll) return;
+    const scroll = $('conversation-scroll');
+    const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 140;
+    state.lastMessages = key;
+    renderMessages(visible, running);
+    if (forceScroll || nearBottom) requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
   }
   function messageText(message) {
     if (typeof message.text === 'string') return message.text;
@@ -297,26 +321,171 @@
     if (Array.isArray(message.content)) return message.content.map((part) => typeof part === 'string' ? part : part.text || '').join('\n');
     return message.output || message.command || message.summary || '';
   }
+  function messageFileScope(cwd) {
+    if (typeof cwd !== 'string' || !cwd) return null;
+    const windows = /^[a-z]:[\\/]/i.test(cwd);
+    const normalize = value => {
+      const normalized = value.replaceAll('\\', '/').replace(/\/+$/, '');
+      return windows ? normalized.toLowerCase() : normalized;
+    };
+    return { cwd, windows, normalize, root: normalize(cwd) };
+  }
+  function messageReference(raw, context) {
+    const reference = String(raw || '').trim();
+    if (!reference || reference.length > 4096 || /[\u0000-\u001f\u007f]/.test(reference)) return null;
+    if (/^https:/i.test(reference)) {
+      try {
+        const url = new URL(reference);
+        if (url.protocol === 'https:' && !url.username && !url.password) return { kind: 'external', href: url.href };
+      } catch {}
+      return null;
+    }
+    const scope = messageFileScope(context.cwd);
+    if (!scope || !context.threadId) return null;
+    let decoded;
+    try { decoded = decodeURIComponent(reference); } catch { return null; }
+    // Never normalize away an attempted traversal or repeatedly decode a path.
+    if (/[\u0000-\u001f\u007f]/.test(decoded) || /%[a-f\d]{2}/i.test(decoded) || /(^|[\\/])\.\.([\\/]|$)/.test(decoded)) return null;
+    let candidate = decoded;
+    if (/^file:/i.test(reference)) {
+      try {
+        const url = new URL(reference);
+        if (url.protocol !== 'file:' || (url.hostname && url.hostname !== 'localhost') || url.search || (url.hash && !/^#L\d+(?:C\d+)?(?:-L?\d+(?:C\d+)?)?$/.test(url.hash))) return null;
+        candidate = decodeURIComponent(url.pathname) + url.hash;
+        if (/^\/[a-z]:\//i.test(candidate)) candidate = candidate.slice(1);
+      } catch { return null; }
+    } else if (/^sandbox:/i.test(reference)) candidate = decoded.slice('sandbox:'.length);
+    else if (/^[a-z][a-z\d+.-]*:/i.test(reference) && !/^[a-z]:[\\/]/i.test(reference)) return null;
+    if (scope.windows && /^\/[a-z]:\//i.test(candidate)) candidate = candidate.slice(1);
+    candidate = candidate.replace(/#L\d+(?:C\d+)?(?:-L?\d+(?:C\d+)?)?$/, '').replace(/:\d+(?::\d+)?$/, '').replaceAll('\\', '/');
+    if (!candidate || candidate === '.' || candidate.startsWith('//') || /(^|\/)\.\.(\/|$)/.test(candidate) || /[<>:"|?*]/.test(candidate.replace(/^[a-z]:/i, ''))) return null;
+    if (/^(?:\/|[a-z]:\/)/i.test(candidate)) {
+      const absolute = scope.normalize(candidate);
+      if (!absolute.startsWith(scope.root + '/')) return null;
+    }
+    return { kind: 'file', reference };
+  }
+  function readMessageDestination(content, start) {
+    let depth = 1, angle = false;
+    for (let index = start; index < Math.min(content.length, start + 4300); index++) {
+      const char = content[index];
+      if (char === '\n' || char === '\r') return null;
+      if (char === '<' && index === start) angle = true;
+      else if (char === '>' && angle) angle = false;
+      else if (!angle && char === '(') depth++;
+      else if (!angle && char === ')' && --depth === 0) {
+        let target = content.slice(start, index).trim();
+        const wrapped = /^<([^<>]+)>(?:\s+["'][^"']*["'])?$/.exec(target);
+        target = wrapped ? wrapped[1] : target.replace(/\s+(?:"[^"]*"|'[^']*')$/, '');
+        return { target, end: index + 1 };
+      }
+    }
+    return null;
+  }
+  function renderMessageContent(element, value, context) {
+    const content = String(value);
+    const extension = /\.(?:pdf|docx?|xlsx?|pptx?|txt|md|markdown|csv|tsv|jsonl?|ya?ml|toml|log|html?|svg|png|jpe?g|gif|webp|avif|bmp|ico|zip|gz|7z|tar|mp[34]|webm|mov|wav|ogg|py|[cm]?js|tsx?|jsx|css|sql|sh|ps1|bat|cmd|c|h|cpp|hpp|cs|java|go|rs|tex)(?::\d+(?::\d+)?)?(?:#L\d+(?:C\d+)?(?:-L?\d+(?:C\d+)?)?)?$/i;
+    const tokens = /\x60{3}[\s\S]*?(?:\x60{3}|$)|\x60([^\x60\r\n]+)\x60|!?\[([^\]\r\n]{1,200})\]\(|https:\/\/[^\s<>"'\x60]+|(?:[a-z]:[\\/]|\/|(?:\.\/)?(?:[\w.-]+\/)+)[^\s<>"'\x60()[\]{}]+/gi;
+    let cursor = 0, match;
+    while ((match = tokens.exec(content))) {
+      const start = match.index;
+      let end = tokens.lastIndex, label, target;
+      if (match[0].startsWith(String.fromCharCode(96).repeat(3))) continue;
+      if (match[1] !== undefined) {
+        target = match[1];
+        if (!extension.test(target)) continue;
+        label = target;
+      } else if (match[2] !== undefined) {
+        const destination = readMessageDestination(content, end);
+        if (!destination) continue;
+        target = destination.target;
+        label = match[2];
+        end = destination.end;
+        tokens.lastIndex = end;
+      } else {
+        target = match[0].replace(/[.,;!?，。；！？]+$/, '');
+        if (!/^https:/i.test(target) && !extension.test(target)) continue;
+        label = target;
+        end = start + target.length;
+      }
+      const reference = messageReference(target, context);
+      if (!reference) continue;
+      element.append(document.createTextNode(content.slice(cursor, start)));
+      if (reference.kind === 'external') {
+        const link = node('a', 'message-external-link', label);
+        link.href = reference.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        element.append(link);
+      } else {
+        const button = node('button', 'message-file-link', label);
+        button.type = 'button'; button.title = '预览或下载：' + reference.reference;
+        button.dataset.fileReference = reference.reference;
+        button.addEventListener('click', () => openMessageFile(reference.reference, context, button));
+        element.append(button);
+      }
+      cursor = end;
+    }
+    element.append(document.createTextNode(content.slice(cursor)));
+  }
+  let messageFileRequest = 0;
+  async function openMessageFile(reference, context, button) {
+    const request = ++messageFileRequest;
+    const generation = state.conversationGeneration;
+    const current = () => request === messageFileRequest && generation === state.conversationGeneration && state.activeId === context.threadId && ['owner', 'controller'].includes(state.role);
+    button.disabled = true;
+    try {
+      const scope = messageFileScope(context.cwd);
+      if (!scope || !messageReference(reference, context)) throw new Error('只能打开当前聊天项目内的文件。');
+      let project = state.projects.find(value => value.exists && scope.normalize(value.path) === scope.root);
+      if (!project) {
+        await loadProjects();
+        if (!current()) return;
+        project = state.projects.find(value => value.exists && scope.normalize(value.path) === scope.root);
+      }
+      if (!project) throw new Error('当前聊天项目尚未可访问，请刷新项目列表后重试。');
+      const result = await api('/api/projects/' + encodeURIComponent(project.id) + '/resolve?reference=' + encodeURIComponent(reference));
+      if (!current()) return;
+      if (result.projectId !== project.id || typeof result.path !== 'string' || !result.path || /^(?:[\\/]|[a-z]:)/i.test(result.path) || result.path.split(/[\\/]/).includes('..')) throw new Error('文件路径校验未通过，请从项目文件列表重新打开。');
+      await previewFile({ name: result.name || result.path.split('/').at(-1), path: result.path }, project.id);
+    } catch (error) { if (current()) toast(error.message); }
+    finally { if (button.isConnected) button.disabled = false; }
+  }
   function renderMessages(messages, running) {
     const list = $('messages');
-    const expanded = new Set([...list.querySelectorAll('details[open]')].map((detail) => detail.dataset.messageId));
+    // Capture the native disclosure state before streaming replaces its DOM.
+    for (const detail of list.querySelectorAll('details[data-disclosure-key]')) {
+      state.messageDisclosure.set(detail.dataset.disclosureKey, detail.open);
+    }
     list.replaceChildren();
-    for (const item of messages) {
+    for (const [index, item] of messages.entries()) {
       const content = messageText(item);
       if (!content) continue;
       const role = item.role === 'user' ? 'user' : item.role === 'tool' || ['command', 'commandExecution', 'tool', 'fileChange'].includes(item.type) ? 'tool' : 'assistant';
+      // Only public progress messages are collapsible; final answers remain visible.
+      const process = role === 'assistant' && item.phase === 'commentary';
       const article = node('article', `message ${role}`);
       article.append(node('div', 'message-avatar', role === 'user' ? '我' : role === 'tool' ? '⌘' : 'C'));
       const body = node('div', 'message-body');
       const heading = node('div', 'message-name', role === 'user' ? '你' : role === 'tool' ? item.title || '执行记录' : 'Codex');
       if (item.createdAt) heading.append(node('time', '', dateLabel(item.createdAt)));
+      const delivery = role === 'user' && ({ sending: '发送中…', failed: '发送失败', uncertain: '结果未确认', sent: '已发送' })[item.delivery];
+      if (delivery) {
+        const label = node('span', 'message-delivery', delivery);
+        label.dataset.status = item.delivery;
+        heading.append(label);
+      }
       body.append(heading);
-      const pre = node('pre', 'message-content', content);
-      if (role === 'tool') {
-        const detail = node('details');
+      const pre = node('pre', 'message-content');
+      renderMessageContent(pre, content, { threadId: state.activeId, cwd: state.thread?.cwd });
+      if (role === 'tool' || process) {
+        const detail = node('details', `message-disclosure${process ? ' message-process' : ''}`);
+        const key = JSON.stringify([state.activeId, item.id ? ['id', item.id] : ['position', item.turnId || '', item.type || role, index]]);
         detail.dataset.messageId = item.id || '';
-        detail.open = expanded.has(detail.dataset.messageId);
-        detail.append(node('summary', '', item.title || String(content).split('\n')[0].slice(0, 100)), pre);
+        detail.dataset.disclosureKey = key;
+        detail.open = state.messageDisclosure.get(key) === true;
+        detail.addEventListener('toggle', () => {
+          if (detail.isConnected) state.messageDisclosure.set(key, detail.open);
+        });
+        detail.append(node('summary', '', process ? '思考与过程' : item.title || String(content).split('\n')[0].slice(0, 100)), pre);
         body.append(detail);
       } else body.append(pre);
       article.append(body);
@@ -380,26 +549,54 @@
   }
   async function sendPrompt(event) {
     event.preventDefault();
-    const prompt = $('prompt').value.trim();
+    const originalInput = $('prompt').value;
+    const prompt = originalInput.trim();
     if (!prompt || state.sending || state.activeReadOnly) return;
+    const threadId = state.activeId;
+    const generation = state.conversationGeneration;
+    const outgoing = {
+      id: `pending-${Date.now()}-${++state.outgoingSequence}`, threadId,
+      viewGeneration: generation, text: prompt, createdAt: Date.now(), delivery: 'sending',
+      baselineIds: new Set((state.thread?.messages || []).map(message => message.id)),
+    };
+    state.outgoing.set(outgoing.id, outgoing);
+    while (state.outgoing.size > 40) state.outgoing.delete(state.outgoing.keys().next().value);
+    const stillHere = () => state.conversationGeneration === generation && state.activeId === threadId;
     state.sending = true;
+    state.readRevision++;
     $('send').disabled = true;
     hidden('error-banner', true);
+    hidden('welcome', true);
+    renderConversation(state.thread?.messages || [], isRunning(state.thread), true);
     try {
-      let data;
-      if (!state.activeId) {
-        data = await api('/api/threads', { method: 'POST', body: { prompt, projectId: $('project-select').value || undefined, ...modelChoice() } });
-        state.activeId = data.thread?.id || data.threadId || data.id;
-        if (!state.activeId) throw new Error('任务已提交，但服务器没有返回任务编号。请刷新任务列表。');
-      } else data = await api(`/api/threads/${encodeURIComponent(state.activeId)}/messages`, { method: 'POST', body: { prompt, ...modelChoice() } });
-      $('prompt').value = '';
-      resizePrompt();
-      hidden('welcome', true);
-      state.lastMessages = '';
-      await loadThread(true);
+      const data = threadId
+        ? await api(`/api/threads/${encodeURIComponent(threadId)}/messages`, { method: 'POST', body: { prompt, ...modelChoice() } })
+        : await api('/api/threads', { method: 'POST', body: { prompt, projectId: $('project-select').value || undefined, ...modelChoice() } });
+      const returnedId = data.thread?.id || data.threadId || data.id || threadId;
+      if (!returnedId || !Array.isArray(data.thread?.messages)) throw new Error('指令已提交，但返回记录不完整。请刷新任务列表核对，不要重复发送。');
+      const showResponse = stillHere();
+      state.outgoing.delete(outgoing.id);
+      state.readRevision++;
+      if (showResponse) {
+        state.activeId = returnedId;
+        state.thread = data.thread;
+        showSubmissionWarning(data.thread);
+        state.activeReadOnly = Boolean(data.thread.readOnly || data.thread.controllable === false);
+        // Render the accepted POST body immediately; a poll that began before
+        // this response must not erase the just-submitted user message.
+        renderConversation(data.thread.messages, isRunning(data.thread), true);
+        if ($('prompt').value === originalInput) { $('prompt').value = ''; resizePrompt(); }
+        renderThreads();
+        await loadThread(true);
+      }
       await loadThreads();
-    } catch (error) { showError(error); }
-    finally { state.sending = false; $('send').disabled = state.activeReadOnly; }
+    } catch (error) {
+      outgoing.delivery = error.status >= 400 && error.status < 500 && error.status !== 408 ? 'failed' : 'uncertain';
+      if (stillHere()) {
+        showError(error);
+        renderConversation(state.thread?.messages || [], isRunning(state.thread), true);
+      }
+    } finally { state.sending = false; $('send').disabled = state.activeReadOnly; }
   }
   async function stopTurn() {
     if (!state.activeId) return;
@@ -468,7 +665,7 @@
     $('files-project').value = state.filesProjectId;
     await browseFiles('');
   }
-  function fileUrl(action, filePath) { return `/api/projects/${encodeURIComponent(state.filesProjectId)}/${action}?path=${encodeURIComponent(filePath)}`; }
+  function fileUrl(action, filePath, projectId = state.filesProjectId) { return `/api/projects/${encodeURIComponent(projectId)}/${action}?path=${encodeURIComponent(filePath)}`; }
   function formatBytes(value) {
     if (value < 1024) return `${value} B`;
     if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
@@ -505,9 +702,9 @@
     } catch (error) { if (generation === state.filesGeneration) { $('files-error').textContent = error.message; $('file-list').replaceChildren(); } }
   }
   let previewGeneration = 0;
-  async function previewFile(entry) {
+  async function previewFile(entry, projectId = state.filesProjectId) {
     const generation = ++previewGeneration;
-    const downloadUrl = fileUrl('download', entry.path), contentUrl = fileUrl('content', entry.path), textUrl = fileUrl('preview', entry.path);
+    const downloadUrl = fileUrl('download', entry.path, projectId), contentUrl = fileUrl('content', entry.path, projectId), textUrl = fileUrl('preview', entry.path, projectId);
     $('preview-title').textContent = entry.name; $('preview-download').href = downloadUrl; $('preview-download').download = entry.name;
     $('preview-content').replaceChildren(); $('preview-dialog').showModal();
     if (/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(entry.name)) {

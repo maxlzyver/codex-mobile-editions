@@ -3,15 +3,17 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { AccessError } from './security.mjs';
 import { Models } from './models.mjs';
+import { SubmittedMessages } from './submitted-messages.mjs';
 
 const clip = value => String(value || '').slice(-40000);
 const active = status => status?.type === 'active' || status === 'inProgress';
 const selectionConfig = selection => ({ model: selection.model, ...(selection.effort ? { config: { model_reasoning_effort: selection.effort } } : {}) });
-function message(item) {
-  if (item.type === 'userMessage') return { id: item.id, role: 'user', text: (item.content || []).map(c => c.text || (c.type === 'image' ? '[图片]' : '')).join('\n') };
-  if (item.type === 'agentMessage') return { id: item.id, role: 'assistant', text: item.text || '' };
-  if (item.type === 'commandExecution') return { id: item.id, role: 'tool', text: clip((item.command || '') + '\n' + (item.aggregatedOutput || '')), status: item.status };
-  if (item.type === 'fileChange') return { id: item.id, role: 'tool', text: '文件修改\n' + (item.changes || []).map(c => `${c.path}\n${clip(c.diff)}`).join('\n'), status: item.status };
+function message(item, turnId = null, index = 0) {
+  const identity = { id: item.id || `${turnId || 'unknown'}:${item.type}:${index}`, turnId };
+  if (item.type === 'userMessage') return { ...identity, role: 'user', text: (item.content || []).map(c => c.text || (c.type === 'image' ? '[图片]' : '')).join('\n') };
+  if (item.type === 'agentMessage') return { ...identity, role: 'assistant', text: item.text || '', phase: item.phase };
+  if (item.type === 'commandExecution') return { ...identity, role: 'tool', text: clip((item.command || '') + '\n' + (item.aggregatedOutput || '')), status: item.status };
+  if (item.type === 'fileChange') return { ...identity, role: 'tool', text: '文件修改\n' + (item.changes || []).map(c => `${c.path}\n${clip(c.diff)}`).join('\n'), status: item.status };
   return null;
 }
 export class Tasks {
@@ -19,6 +21,7 @@ export class Tasks {
     this.bridge = bridge;
     this.defaultCwd = defaultCwd;
     this.models = options.models || new Models(bridge);
+    this.submitted = options.submitted || new SubmittedMessages(directory);
     this.file = path.join(directory, 'tasks.json');
     this.owned = new Map();
     this.cache = new Map();
@@ -78,7 +81,7 @@ export class Tasks {
   hydrate(thread) {
     const latest = thread.turns?.at(-1);
     const owned = this.owned.get(thread.id);
-    const messages = (thread.turns || []).flatMap(turn => (turn.items || []).map(message).filter(Boolean));
+    const messages = (thread.turns || []).flatMap(turn => (turn.items || []).map((item, index) => message(item, turn.id, index)).filter(Boolean));
     return { id: thread.id, title: owned?.title || thread.name || thread.preview || '未命名任务', cwd: thread.cwd, messages: messages.slice(-400), status: active(thread.status) || latest?.status === 'inProgress' ? 'running' : latest?.status === 'failed' ? 'error' : 'idle', turnId: latest?.status === 'inProgress' ? latest.id : null, updatedAt: (thread.updatedAt || 0) * 1000, readAt: Date.now(), error: latest?.error?.message || null, model: thread.model || owned?.model || null, effort: thread.reasoningEffort || owned?.effort || null, forkedFromId: thread.forkedFromId || owned?.forkedFromId || null };
   }
   async get(id) {
@@ -90,7 +93,16 @@ export class Tasks {
     this.cache.set(id, cached);
     return this.view(cached);
   }
-  view(t) { return { thread: { ...t, readOnly: !this.owned.has(t.id) }, approvals: [...this.approvals.values()].filter(a => a.threadId === t.id).map(({ rpcId, ...a }) => a) }; }
+  view(t) { return { thread: { ...t, messages: this.submitted.merge(t.id, t.messages), readOnly: !this.owned.has(t.id), ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) }, approvals: [...this.approvals.values()].filter(a => a.threadId === t.id).map(({ rpcId, ...a }) => a) }; }
+  items(t, turn) {
+    for (const [index, item] of (turn?.items || []).entries()) {
+      const parsed = message(item, turn.id, index);
+      if (!parsed) continue;
+      const existing = t.messages.findIndex(value => value.id === parsed.id);
+      if (existing < 0) t.messages.push(parsed); else t.messages[existing] = parsed;
+    }
+    t.messages = t.messages.slice(-400);
+  }
   validatePrompt(prompt) {
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 30000) throw new AccessError(400, '请输入 1–30000 个字符的任务指令。');
     return prompt.trim();
@@ -110,8 +122,7 @@ export class Tasks {
     this.loaded.add(thread.id);
     this.cache.set(thread.id, { id: thread.id, ...entry, messages: [], status: 'idle', readAt: Date.now() });
     this.listTime = 0;
-    try { await this.send(thread.id, prompt, selected); } catch (error) { error.threadId = thread.id; throw error; }
-    return this.get(thread.id);
+    try { return await this.send(thread.id, prompt, selected); } catch (error) { error.threadId = thread.id; throw error; }
   }
   async fork(id, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) throw new AccessError(400, '无效的接续设置。');
@@ -129,7 +140,7 @@ export class Tasks {
     this.cache.set(thread.id, { ...this.hydrate({ ...thread, cwd: entry.cwd }), ...entry, status: 'idle', turnId: null, error: null });
     this.listTime = 0;
     if (prompt) {
-      try { await this.send(thread.id, prompt, selected); } catch (error) { error.threadId = thread.id; throw error; }
+      try { return await this.send(thread.id, prompt, selected); } catch (error) { error.threadId = thread.id; throw error; }
     }
     return this.get(thread.id);
   }
@@ -151,18 +162,22 @@ export class Tasks {
         await this.bridge.request('thread/resume', { threadId: id, approvalPolicy: 'on-request', sandbox: 'workspace-write', ...selectionConfig(selected) });
         this.loaded.add(id);
       }
+      const receipt = this.submitted.begin(id, prompt, t.messages, t.status === 'running' ? t.turnId : null);
       if (t.status === 'running' && t.turnId) {
-        await this.bridge.request('turn/steer', { threadId: id, expectedTurnId: t.turnId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
+        const result = await this.bridge.request('turn/steer', { threadId: id, expectedTurnId: t.turnId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
+        this.submitted.accept(receipt, result.turnId || t.turnId);
       } else {
         startingTurn = true;
         t.status = 'running';
         t.error = null;
         t.turnId = null;
         const { turn } = await this.bridge.request('turn/start', { threadId: id, input: [{ type: 'text', text: prompt, text_elements: [] }], model: selected.model, ...(selected.effort ? { effort: selected.effort } : {}) });
+        this.submitted.accept(receipt, turn.id);
+        this.items(t, turn);
         t.model = selected.model;
         t.effort = selected.effort;
         Object.assign(this.owned.get(id), { model: selected.model, effort: selected.effort });
-        this.save();
+        try { this.save(); } catch { t.submissionWarning = '指令已发送，但模型设置暂未保存；请勿重复发送。'; }
         if (t.status === 'running') {
           if (['completed', 'interrupted', 'failed'].includes(turn.status)) {
             t.status = turn.status === 'failed' ? 'error' : 'idle';
@@ -172,7 +187,7 @@ export class Tasks {
         }
       }
       t.updatedAt = Date.now();
-      return this.view(t);
+      return { ...this.view(t), accepted: true, submissionId: receipt.id };
     } catch (e) {
       const t = this.cache.get(id);
       if (startingTurn && t && !t.turnId) t.status = 'error';
@@ -191,18 +206,19 @@ export class Tasks {
       for (const [id, a] of this.approvals) if (a.rpcId === p.requestId) this.approvals.delete(id);
     }
     if (!t) return;
-    if (method === 'turn/started') { t.status = 'running'; t.turnId = p.turn.id; }
+    if (method === 'turn/started') { t.status = 'running'; t.turnId = p.turn.id; this.items(t, p.turn); }
     if (method === 'turn/completed') {
+      this.items(t, p.turn);
       t.status = p.turn.status === 'failed' ? 'error' : 'idle'; t.error = p.turn.error?.message || null; t.turnId = null; t.readAt = 0;
       for (const [id, a] of this.approvals) if (a.threadId === t.id) this.approvals.delete(id);
     }
     if (method === 'item/started' || method === 'item/completed') {
-      const m = message(p.item);
+      const m = message(p.item, p.turnId || t.turnId);
       if (m) { const i = t.messages.findIndex(x => x.id === m.id); if (i < 0) t.messages.push(m); else t.messages[i] = m; }
     }
     if (method === 'item/agentMessage/delta' || method === 'item/commandExecution/outputDelta') {
       let m = t.messages.find(x => x.id === p.itemId);
-      if (!m) { m = { id: p.itemId, role: method.includes('agentMessage') ? 'assistant' : 'tool', text: '' }; t.messages.push(m); }
+      if (!m) { m = { id: p.itemId, turnId: p.turnId || t.turnId, role: method.includes('agentMessage') ? 'assistant' : 'tool', text: '' }; t.messages.push(m); }
       m.text = clip(m.text + (p.delta || ''));
     }
     if (method === 'error') t.error = p.error?.message || '任务执行遇到错误。';

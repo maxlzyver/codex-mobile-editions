@@ -10,7 +10,9 @@ import { createInstaller, runUpdateHelper, validatePreparedUpdate, validateUpdat
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const WORK = fileURLToPath(new URL('../../../../../work/', import.meta.url));
-const PROFILE = readEditionProfile(ROOT);
+const edition = readEditionProfile(ROOT);
+// Keep the simulated installation independent of the release currently under test.
+const PROFILE = { ...edition, version: '1.0.0', assetName: editionAssetName(edition, '1.0.0') };
 const sha = value => createHash('sha256').update(value).digest('hex');
 function crc32(bytes) { let crc = -1; for (const byte of bytes) { crc ^= byte; for (let n = 0; n < 8; n++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1)); } return (crc ^ -1) >>> 0; }
 function zip(entries) {

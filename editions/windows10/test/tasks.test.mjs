@@ -100,6 +100,8 @@ test('create persists ownership, uses workspace permission defaults, and starts 
   const result = await tasks.create('  创建一个报告  ');
   assert.equal(result.thread.readOnly, false);
   assert.equal(result.thread.status, 'running');
+  assert.equal(result.thread.messages[0].text, '创建一个报告');
+  assert.equal(result.thread.messages[0].delivery, 'sent');
   const start = bridge.calls.find(call => call.method === 'thread/start');
   assert.equal(start.params.cwd.toLowerCase(), directory.toLowerCase());
   assert.equal(start.params.approvalPolicy, 'on-request');
@@ -141,7 +143,7 @@ test('completion reconciles durable output, removes approval, and a later messag
   const finished = await tasks.get(thread.id);
   assert.equal(finished.thread.status, 'idle');
   assert.equal(finished.thread.turnId, null);
-  assert.equal(finished.thread.messages[0].text, '已完成');
+  assert.deepEqual(finished.thread.messages.map(message => message.text), ['先检查', '已完成']);
   await tasks.send(thread.id, '继续下一步');
   assert.equal(bridge.calls.filter(call => call.method === 'turn/start').length, 2);
   assert.equal(bridge.calls.filter(call => call.method === 'turn/steer').length, 0);
@@ -422,4 +424,66 @@ test('large thread catalogs stop at 5000 and advertise incomplete results', asyn
   assert.equal(tasks.listComplete, false);
   assert.equal(tasks.listNextCursor, '50');
   assert.equal(bridge.calls.length, 50);
+});
+
+test('CLI sends stay visible through missing item notifications and a service restart', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const created = await tasks.create('First phone instruction');
+  const id = created.thread.id;
+  const firstId = created.thread.messages[0].id;
+  const sent = await tasks.send(id, 'Second phone instruction');
+  assert.equal(sent.accepted, true);
+  assert.deepEqual(sent.thread.messages.map(message => message.text), ['First phone instruction', 'Second phone instruction']);
+  const restarted = new Tasks(bridge, directory, directory);
+  const restored = await restarted.get(id);
+  assert.deepEqual(restored.thread.messages.map(message => message.text), ['First phone instruction', 'Second phone instruction']);
+  assert.equal(restored.thread.messages[0].id, firstId);
+});
+
+test('turn response items reconcile the echo and retain public assistant phase and turn ID', async t => {
+  const { tasks, bridge } = await fixture(t);
+  bridge.handlers.set('turn/start', async () => ({ turn: { id: 'response-turn', status: 'inProgress', items: [
+    { id: 'response-user', type: 'userMessage', content: [{ type: 'text', text: 'From response' }] },
+    { id: 'response-assistant', type: 'agentMessage', phase: 'commentary', text: 'Public progress' },
+    { id: 'private', type: 'reasoning', text: 'Never publish', encryptedContent: 'secret' },
+  ] } }));
+  const result = await tasks.create('From response');
+  assert.equal(result.thread.messages.filter(message => message.role === 'user').length, 1);
+  assert.equal(result.thread.messages[0].serverId, 'response-user');
+  const progress = result.thread.messages.find(message => message.role === 'assistant');
+  assert.equal(progress.phase, 'commentary');
+  assert.equal(progress.turnId, 'response-turn');
+  assert(!JSON.stringify(result).includes('Never publish'));
+  assert(!JSON.stringify(result).includes('secret'));
+});
+
+test('repeated CLI prompts remain separate until each matching item is reported', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const created = await tasks.create('Again');
+  const id = created.thread.id;
+  const second = await tasks.send(id, 'Again');
+  const ids = second.thread.messages.map(message => message.id);
+  assert.equal(new Set(ids).size, 2);
+  bridge.item(id, { id: 'real-first', type: 'userMessage', content: [{ type: 'text', text: 'Again' }] });
+  assert.deepEqual((await tasks.get(id)).thread.messages.map(message => message.id), ids);
+  bridge.item(id, { id: 'real-second', type: 'userMessage', content: [{ type: 'text', text: 'Again' }] });
+  const complete = (await tasks.get(id)).thread.messages;
+  assert.deepEqual(complete.map(message => message.id), ids);
+  assert.deepEqual(complete.map(message => message.serverId), ['real-first', 'real-second']);
+});
+
+test('a failed or still-pending CLI submission is not labelled as accepted', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const created = await tasks.create('Accepted');
+  const id = created.thread.id;
+  const gate = deferred();
+  const entered = deferred();
+  bridge.handlers.set('turn/steer', async () => { entered.resolve(); return gate.promise; });
+  const pending = tasks.send(id, 'Not confirmed');
+  await entered.promise;
+  assert.deepEqual((await tasks.get(id)).thread.messages.map(message => message.text), ['Accepted']);
+  gate.reject(new Error('Timed out'));
+  await assert.rejects(pending, /Timed out/);
+  assert.deepEqual((await tasks.get(id)).thread.messages.map(message => message.text), ['Accepted']);
+  assert.equal(tasks.submitted.records.length, 1);
 });

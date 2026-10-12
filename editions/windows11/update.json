@@ -4,7 +4,7 @@
     {
       "bytes": 38912,
       "path": "Codex-Mobile.exe",
-      "sha256": "b8ae1348c4c7852d47b666a236ef44f655bf58c96566d891f70b86e33465edba"
+      "sha256": "3d22f4690f06add848e991897198087b63c696ede46fefb68a8e9dd214c2010e"
     },
     {
       "bytes": 1096,
@@ -17,9 +17,9 @@
       "sha256": "414565396dde7c97f1d83a978f11172c68056e022a72905ac40b35cd3f0d8750"
     },
     {
-      "bytes": 9894,
+      "bytes": 10388,
       "path": "README.md",
-      "sha256": "fefd9d4166dfc258c72d77944decd607f072602c605f7643a74d2e29b608baa1"
+      "sha256": "071a4cb6089e7111e157e3d289e1eb5a1111b445767d5da0faffd375d1876286"
     },
     {
       "bytes": 106,
@@ -42,29 +42,29 @@
       "sha256": "cb1bea0facc657c0abbac5abd8fc2c53b0fab6a864d9f3e8ae26be59ee06f323"
     },
     {
-      "bytes": 1399,
+      "bytes": 1521,
       "path": "build-launcher.ps1",
-      "sha256": "84514e3006694c91a4e88b63bb29f9b68b2f4bda189cebd1744ac94c5be884e3"
+      "sha256": "2e3ad1a537ec009b84a7a3092020ce189334e2719d681425172673043cca9b49"
     },
     {
-      "bytes": 6246,
+      "bytes": 6397,
       "path": "docs/COMPATIBILITY.md",
-      "sha256": "0c44c567ab983e90b6adbff5da1c6cddcd3458b0f396c100224a959c4d74400a"
+      "sha256": "1d154ca9f8c6eaea755d53cdb5fd5b6268e0e6e8c6711f04b1e34fd12e354e4f"
     },
     {
-      "bytes": 4717,
+      "bytes": 4729,
       "path": "docs/RELEASING.md",
-      "sha256": "9b9eeed94109869be35843153a8f77a503a765e8195ff99f3c6ad07ab91e056b"
+      "sha256": "0b474c822f70f1ed0e7495fe35ae3aa3c8da8fa1216a62f073e2f57e70bb1c2c"
     },
     {
       "bytes": 257,
       "path": "edition.json",
-      "sha256": "6f84022dde52260e01c848911e9176c9fffdbcf2909ceb551ab49eb4817f7e70"
+      "sha256": "30daaaf5e93044d57a6fc6b3b75b99024346b8059def9747028d8e5a183e2bca"
     },
     {
       "bytes": 39476,
       "path": "launcher/Launcher.cs",
-      "sha256": "38f2bde9c40e3c9b10b6c55c78651a4e715fa7ddef485f4386e60e3f831a6f84"
+      "sha256": "0787080267376d3c402601ec78c1530cdb98d3bf30e0f3856bc3fd8516c51e7e"
     },
     {
       "bytes": 969,
@@ -82,14 +82,14 @@
       "sha256": "45577207de49b4b16e444d5c82ae60c4cc3136c2ad9b77b469e697d9c616b885"
     },
     {
-      "bytes": 14339,
+      "bytes": 16065,
       "path": "lib/desktop-tasks.mjs",
-      "sha256": "effcff7f23fcdc8013afb013c70def3a687c539f9bd8f5afcff82da4a4242c92"
+      "sha256": "60c44533149581d3719b75815939d7c54b39ef7b3f1b58994c2cd941b26cccfc"
     },
     {
-      "bytes": 15647,
+      "bytes": 17847,
       "path": "lib/files.mjs",
-      "sha256": "dee2c77d59ce5176af4b572e88d794d78fe95fe38e22e562f62e1dd6f3a91943"
+      "sha256": "9ed233359c760ca7a178fa6b49f8b066d6257fa4616d6f8dad5db8980c5c3717"
     },
     {
       "bytes": 4070,
@@ -102,9 +102,14 @@
       "sha256": "31b378b01796e67a30602a926483c89fc50589a4809ec07f05cf848517d72626"
     },
     {
-      "bytes": 15490,
+      "bytes": 6643,
+      "path": "lib/submitted-messages.mjs",
+      "sha256": "5be903c67a5a260df793b65f387d41c362bd143bedb2f7e874e932f754e68207"
+    },
+    {
+      "bytes": 16835,
       "path": "lib/tasks.mjs",
-      "sha256": "016b73c5a70a51d6068ba919299dcd7e3b7862762fd49d2f5571f4c119ee3a56"
+      "sha256": "264ee8e9cd53a0fa862c97e96c41f4857baa05e48fef29f1df00fef5e8f100e6"
     },
     {
       "bytes": 14213,
@@ -122,14 +127,14 @@
       "sha256": "a38e3e8a1cca29e2c9b0ea7a400e63c6ca94c6e448101036ee15452e82bddd55"
     },
     {
-      "bytes": 601,
+      "bytes": 579,
       "path": "package.json",
-      "sha256": "b9af93e8d59ee9eae4d5da69a356b0cef2a2c463845e1c1604e28183b7b06a20"
+      "sha256": "f65d517fe5266a410a8188c8f63fc3dfded607e8e2822211bb1161cd4c14bdd8"
     },
     {
-      "bytes": 46033,
+      "bytes": 58322,
       "path": "public/app.js",
-      "sha256": "8a79045e3bf3a312797204a19e74fd3b36d9caa30130c2c5164481ccc218b235"
+      "sha256": "b856fc68d7a5c6a03cc23b29771515d9d3d1246601a1023ee459091e3e2fcb08"
     },
     {
       "bytes": 517,
@@ -137,9 +142,9 @@
       "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
     },
     {
-      "bytes": 24695,
+      "bytes": 24845,
       "path": "public/index.html",
-      "sha256": "0a9356fb9628395af2374494fe93b3fcfd5f4400251f6e525c570c59b9d276ff"
+      "sha256": "1fd098db1c967ed838437d97fb115236962fe4cc9125fbc2f080f7415cf86971"
     },
     {
       "bytes": 421,
@@ -157,9 +162,9 @@
       "sha256": "948dd54326c6ed8bacec8fabea089429b15d1dc1e5828d3caf47856fbd079662"
     },
     {
-      "bytes": 29743,
+      "bytes": 34360,
       "path": "public/styles.css",
-      "sha256": "5b0833c165e1628a9821ee246b0605ec16b608ff4cd5aad32b22691120de1840"
+      "sha256": "4e551a1e3395e45085119d2dd9bf89f7594a0efeb34ed24c561c3d7dff37d81a"
     },
     {
       "bytes": 121660,
@@ -167,9 +172,9 @@
       "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
     },
     {
-      "bytes": 22081,
+      "bytes": 22231,
       "path": "server.mjs",
-      "sha256": "cf2d692f1c613053bc2b35ab2a7b6935e3ed56fbbf4c1bf258ae343e71bb56ca"
+      "sha256": "9fbbf59d2f009052382c8a36cf323e3afbb1ddf41a313a6b5b24375d29ed54b0"
     },
     {
       "bytes": 6551,
@@ -182,14 +187,14 @@
       "sha256": "501155cc164e2d5d51a5a8cc9fb1e3e430f00ebe4dccb2b88da909a28f175029"
     },
     {
-      "bytes": 14594,
+      "bytes": 20276,
       "path": "test/desktop-tasks.test.mjs",
-      "sha256": "697270934a9767772112c97cbf74fe13bbf8ef3fec4e1a1aae80e53cb60c4adf"
+      "sha256": "1beca96730f6a42d6f60763bb4860ce804995f0720d771a77140ce26c7180001"
     },
     {
-      "bytes": 10200,
+      "bytes": 12722,
       "path": "test/files.test.mjs",
-      "sha256": "b75cd31903ffd00759d51d5275e6a6c29a775f844548b29f7444913a93082af7"
+      "sha256": "922b912b270ec61df9600c99c94822e6418eae1fe0e5a09b86485eb89f89ec4e"
     },
     {
       "bytes": 4636,
@@ -197,14 +202,19 @@
       "sha256": "8fca75644ffb21bce0966d1a92f8aad33874e6d4952d64073d18c45c5b2b0d49"
     },
     {
-      "bytes": 30785,
+      "bytes": 32581,
       "path": "test/server.test.mjs",
-      "sha256": "028c8f686ed5a8fcbccd3791c0d3bd2e1bc0378e9b3899e18765617477fe20e1"
+      "sha256": "d6fcc6a9eb7eef0fc00113df313bc5724362869a845fbb15e175b1f983288990"
     },
     {
-      "bytes": 24025,
+      "bytes": 6178,
+      "path": "test/submitted-messages.test.mjs",
+      "sha256": "12457a0cf8bfbbb9b14fd43a00175d384fce635c2dd8df49dd6dec752ccbf0de"
+    },
+    {
+      "bytes": 27804,
       "path": "test/tasks.test.mjs",
-      "sha256": "b68e48dd7dd67662fcaccd39db54713283047c676aa08d5b0ac3f4406363ec79"
+      "sha256": "aaca9cb9527000b757741333e61ee0004d610f7257c2c07f0b5010988b499739"
     },
     {
       "bytes": 5001,
@@ -212,14 +222,14 @@
       "sha256": "044a2ef87175ac6d1f94f838a3cced732b79c759492a7e5b40e3c8b0b17fc725"
     },
     {
-      "bytes": 18335,
+      "bytes": 18516,
       "path": "test/update-installer.test.mjs",
-      "sha256": "98a258c445c9093b02e86c79af6de6ff30453de52805bf548a633dfef5b85e5a"
+      "sha256": "4e01a994f4b3eafe45996700faf11c5d4e8c4f7cceb5c91b0f0a95379906dd06"
     },
     {
-      "bytes": 22177,
+      "bytes": 22358,
       "path": "test/updater.test.mjs",
-      "sha256": "314eaf55c2833654d8b5da35823c9021fde97a61cbb23e30fd5ca19b08efaf7a"
+      "sha256": "2bd54580b5af5b998e97420e0a65a26d20d5e0cceca3f33c8d21d9544ccc03f6"
     },
     {
       "bytes": 24212,
@@ -241,5 +251,5 @@
   "platform": "Windows 11 x64",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
-  "version": "1.0.0"
+  "version": "1.0.1"
 }

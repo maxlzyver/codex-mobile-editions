@@ -8,7 +8,9 @@ import { UpdateManager, parseVersion, compareVersions, readEditionProfile, editi
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const WORK = fileURLToPath(new URL('../../../../../work/', import.meta.url));
-const PROFILE = readEditionProfile(ROOT);
+const edition = readEditionProfile(ROOT);
+// Keep the simulated installation independent of the release currently under test.
+const PROFILE = { ...edition, version: '1.0.0', assetName: editionAssetName(edition, '1.0.0') };
 const COMMIT = 'a'.repeat(40), NEXT_COMMIT = 'b'.repeat(40);
 const RAW = 'https://raw.githubusercontent.com/' + UPDATE_REPOSITORY + '/' + COMMIT + '/' + PROFILE.updatePath + '/update.json';
 const ARCHIVE = 'https://codeload.github.com/' + UPDATE_REPOSITORY + '/zip/' + COMMIT;

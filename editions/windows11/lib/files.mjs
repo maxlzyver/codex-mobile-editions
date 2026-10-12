@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, open, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { AccessError } from './security.mjs';
 
 const PREVIEW_BYTES = 1024 * 1024;
@@ -241,6 +242,40 @@ export class Projects {
       name: path.basename(resolved.relative),
       modifiedAt: resolved.info.mtimeMs,
     };
+  }
+
+  /** Resolve a chat reference without granting access outside its selected project. */
+  async resolveReference(id, reference) {
+    if (typeof reference !== 'string' || !reference.trim() || reference.length > 4096 || /[\u0000-\u001f]/.test(reference)) throw new AccessError(400, '文件引用无效。');
+    let filename = reference.trim().replace(/#L\d+(?:C\d+)?(?:-L?\d+(?:C\d+)?)?$/i, '');
+    try {
+      if (/^file:/i.test(filename)) {
+        const url = new URL(filename);
+        if (url.hostname && url.hostname.toLowerCase() !== 'localhost') throw new Error('remote');
+        if (url.search || url.hash || url.username || url.password) throw new Error('url');
+        filename = fileURLToPath(url);
+      } else {
+        const sandbox = /^sandbox:/i.test(filename);
+        if (sandbox) filename = filename.slice(8);
+        else if (/^[a-z][a-z\d+.-]*:/i.test(filename) && !/^[a-z]:[\\/]/i.test(filename)) throw new Error('scheme');
+        if (/%[\da-f]{2}/i.test(filename) && !/%(?![\da-f]{2})/i.test(filename)) filename = decodeURIComponent(filename);
+        if (sandbox && process.platform === 'win32' && /^\/[a-z]:[\\/]/i.test(filename)) filename = filename.slice(1);
+        if (sandbox && !path.isAbsolute(filename)) throw new Error('sandbox');
+      }
+    } catch { throw new AccessError(400, '仅支持当前项目内的本机文件引用。'); }
+    filename = filename.replace(/:\d+(?::\d+)?$/, '');
+    const project = await this.resolveProject(id);
+    let relative = filename;
+    if (path.isAbsolute(filename)) {
+      const absolute = path.resolve(filename);
+      if (!contained(project.path, absolute)) throw new AccessError(403, '文件引用不在当前项目内。');
+      relative = path.relative(project.path, absolute);
+    } else if (path.win32.isAbsolute(filename) || path.posix.isAbsolute(filename)) {
+      throw new AccessError(400, '文件引用与当前电脑的平台不匹配。');
+    }
+    relative = relativePath(relative, { allowEmpty: false });
+    const file = await this.resolveFile(id, relative);
+    return { projectId: id, path: relative, name: file.name, mime: file.mime, size: file.size };
   }
 
   /** UTF-8 text only; binary downloads remain available through resolveFile(). */

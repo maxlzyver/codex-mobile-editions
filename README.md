@@ -1,4 +1,4 @@
-# Codex 移动助手 · V1.0 专用版
+# Codex 移动助手 · V1.0.1 专用版
 
 作者：[maxlzyver](https://github.com/maxlzyver) · [反馈邮件](mailto:lzyuan666666@gmail.com) · MIT 许可证
 
@@ -6,19 +6,26 @@
 
 ## 下载与首次使用
 
-请从 [V1.0 发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.0.0) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
+请从 [V1.0.1 发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.0.1) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
 
 | 专用版 | 系统要求 | 完整安装包 | 启动入口 |
 | --- | --- | --- | --- |
-| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.0.0-x64.zip | Codex-Mobile.exe |
-| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.0.0-x64.zip | Codex-Mobile.exe |
-| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.0.0-universal.zip | Start.command |
+| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.0.1-x64.zip | Codex-Mobile.exe |
+| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.0.1-x64.zip | Codex-Mobile.exe |
+| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.0.1-universal.zip | Start.command |
 
 完整解压到当前用户可写目录；在电脑安装并登录兼容的 Codex，启动本版助手并选择项目目录。电脑页面点击“连接手机”，手机扫码后由电脑批准。macOS 首次打开未签名脚本，可能需要在 Finder 右键打开并按系统提示批准；本项目不要求关闭系统安全功能。
 
 程序内置 Node.js 与 cloudflared，不包含 Codex 本身或任何人的账户。Windows ARM64、32 位系统不在本次发布范围。Windows 10 专用启动器不会让不兼容的官方 Codex 版本变得兼容。
 
 旧版 **1.2 不会自动降级到新的专用版 1.0**。请退出旧助手，将新完整包解压到新文件夹，重新选择项目并配对手机。电脑项目和 Codex 聊天仍在原位置。
+
+## V1.0.1 更新
+
+- 公开过程说明（commentary）支持触屏展开与收起，并保留开关选择。
+- 已确认接收的指令保留本地回执，刷新页面后仍可查看；真实聊天记录同步后自动去重，并清楚区分发送中、待同步和失败状态。
+
+完整变更见 [更新日志](CHANGELOG.md)。
 
 ## 能做什么
 
@@ -52,7 +59,7 @@
 
 ## 运行与验证范围
 
-Windows 11 启动器已在当前 Windows 11 机器检查；Windows 10 启动器已编译并验证系统边界，但尚未在 Windows 10 实机完整运行。macOS 的启动、进程管理、Unix socket 和更新代码独立实现；已在 macOS 15 的 Apple 芯片与 Intel GitHub 运行器分别通过 143 项测试，包含中文路径下的原生进程核验。自动化测试不能替代 Finder、真实 Codex 和手机网络的完整实机验收。各次结果见 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)。
+V1.0.0 基线中，Windows 11 启动器已在开发用 Windows 11 机器检查；Windows 10 启动器已编译并验证系统边界，但尚未在 Windows 10 实机完整运行。macOS 的启动、进程管理、Unix socket 和更新代码独立实现；已在 macOS 15 的 Apple 芯片与 Intel GitHub 运行器分别通过 143 项测试，包含中文路径下的原生进程核验。自动化测试不能替代 Finder、真实 Codex 和手机网络的完整实机验收。V1.0.1 本次回归结果及各次记录见 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)。
 
 原桌面连接依赖 Codex 内部接口，可能随其升级变化。局域网需要设备互通；互联网模式使用 Cloudflare Quick Tunnel，地址不固定、流量经过 Cloudflare。电脑需要保持开机、联网且不休眠。
 

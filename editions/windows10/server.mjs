@@ -200,8 +200,9 @@ export async function createConsole(options = {}) {
         if (method === 'GET') { send(res, 200, { projects: await projects.list() }); return; }
         authorized(session, true); const input = await body(req); send(res, 201, await projects.addRoot(input.path)); return;
       }
-      match = /^\/api\/projects\/([a-zA-Z0-9_-]+)\/(files|preview|download|content)$/.exec(url.pathname);
+      match = /^\/api\/projects\/([a-zA-Z0-9_-]+)\/(files|preview|download|content|resolve)$/.exec(url.pathname);
       if (match && method === 'GET') {
+        if (match[2] === 'resolve') { send(res, 200, await projects.resolveReference(match[1], url.searchParams.get('reference'))); return; }
         const relative = url.searchParams.get('path') || '';
         if (match[2] === 'files') { send(res, 200, await projects.browse(match[1], relative)); return; }
         if (match[2] === 'preview') { send(res, 200, await projects.preview(match[1], relative)); return; }

@@ -1,4 +1,5 @@
 import { AccessError } from './security.mjs';
+import { SubmittedMessages, transcriptMessages } from './submitted-messages.mjs';
 
 const choice = value => value !== undefined && value !== null && value !== '';
 const text = value => typeof value === 'string' ? value : typeof value?.text === 'string' ? value.text : '';
@@ -30,14 +31,29 @@ function unpack(result, allowText = false) {
 }
 
 function messages(turns) {
-  return turns.flatMap(turn => (turn.items || []).map(item => {
-    if (item.type === 'userMessage') return { id: item.id, role: 'user', text: (item.content || []).map(content => text(content.text) || (content.type === 'image' ? '[图片]' : '')).join('\n') };
-    if (item.type === 'agentMessage') return { id: item.id, role: 'assistant', text: text(item.text), phase: item.phase };
-    if (item.type === 'commandExecution') return { id: item.id, role: 'tool', text: clip(text(item.command) + '\n' + text(item.output || item.aggregatedOutput)), status: item.status };
-    if (item.type === 'fileChange') return { id: item.id, role: 'tool', text: '文件修改\n' + (item.changes || []).map(change => `${change.path}\n${clip(change.diff)}`).join('\n'), status: item.status };
+  return turns.flatMap(turn => (turn.items || []).map((item, index) => {
+    const identity = { id: item.id || `${turn.id || 'unknown'}:${item.type}:${index}`, turnId: turn.id || null };
+    if (item.type === 'userMessage') return { ...identity, role: 'user', text: (item.content || []).map(content => text(content.text) || (content.type === 'image' ? '[图片]' : '')).join('\n') };
+    if (item.type === 'agentMessage') return { ...identity, role: 'assistant', text: text(item.text), phase: item.phase };
+    if (item.type === 'commandExecution') return { ...identity, role: 'tool', text: clip(text(item.command) + '\n' + text(item.output || item.aggregatedOutput)), status: item.status };
+    if (item.type === 'fileChange') return { ...identity, role: 'tool', text: '文件修改\n' + (item.changes || []).map(change => `${change.path}\n${clip(change.diff)}`).join('\n'), status: item.status };
     // Internal reasoning, context compaction, and sub-agent coordination are not chat messages.
     return null;
   }).filter(Boolean)).slice(-400);
+}
+
+function mergeHistory(saved, live) {
+  const native = new Map(live.map(message => [message.id, message]));
+  const after = new Map();
+  let anchor = null;
+  // Retain saved-only history/stream items next to their preceding common item.
+  // Common items always take their position and contents from the live sequence.
+  for (const message of new Map(saved.map(item => [item.id, item])).values()) {
+    if (native.has(message.id)) { anchor = message.id; continue; }
+    if (!after.has(anchor)) after.set(anchor, []);
+    after.get(anchor).push(message);
+  }
+  return [...(after.get(null) || []), ...[...native.values()].flatMap(message => [message, ...(after.get(message.id) || [])])];
 }
 
 /**
@@ -48,6 +64,7 @@ function messages(turns) {
 export class DesktopTasks {
   constructor(tasks, desktopBridge, options = {}) {
     this.tasks = tasks;
+    this.submitted = tasks.submitted || new SubmittedMessages();
     this.desktop = desktopBridge;
     if (desktopBridge?.options?.hostId && desktopBridge.options.hostId !== 'local') throw new Error('此控制台只支持当前电脑的原生 Codex。');
     this.nativeCache = new Map();
@@ -87,7 +104,7 @@ export class DesktopTasks {
 
   decorate(view, kind, available = false) {
     const meta = this.meta(kind, available);
-    return { ...view, thread: { ...view.thread, ...meta, readOnly: !meta.capabilities.send } };
+    return { ...view, thread: { ...view.thread, ...(Array.isArray(view.thread.messages) ? { messages: this.submitted.merge(view.thread.id, view.thread.messages) } : {}), ...meta, readOnly: !meta.capabilities.send, ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) } };
   }
 
   async tools() {
@@ -146,15 +163,13 @@ export class DesktopTasks {
     let saved;
     try { saved = (await this.tasks.get(id)).thread; } catch { /* Native reads can still work when the companion process is unavailable. */ }
     const prior = saved || this.summaries.get(id) || this.tasks.cache.get(id) || {};
-    const combined = new Map();
-    for (const [index, message] of (saved?.messages || []).entries()) combined.set(message.id || `saved-${index}`, message);
-    for (const [index, message] of messages(turns).entries()) combined.set(message.id || `native-${index}`, message);
+    const combined = mergeHistory(transcriptMessages(saved?.messages || []), messages(turns));
     const thread = {
       id, title: data.thread.title || prior.title || '未命名任务', cwd: data.thread.cwd || prior.cwd,
       status: status(data.thread.status, latest), nativeStatus: rawStatus(data.thread.status),
       turnId: latest?.status === 'inProgress' ? latest.id : null,
       model: data.thread.model || prior.model || null, effort: data.thread.reasoningEffort || prior.effort || null,
-      messages: [...combined.values()].slice(-400), updatedAt: timestamp(data.thread.updatedAt) || Date.now(), readAt: Date.now(),
+      messages: combined.slice(-400), updatedAt: timestamp(data.thread.updatedAt) || Date.now(), readAt: Date.now(),
       error: latest?.error?.message || null, hostId: 'local', historyHasMore: Boolean(data.page?.hasMore),
     };
     const view = { thread, approvals: [], nativeAttention: { needsDesktop: true, message: '原生任务的停止与审批需在桌面端处理。' } };
@@ -167,7 +182,11 @@ export class DesktopTasks {
     try { return await this.nativeRead(id); }
     catch (error) {
       this.failed(error);
-      const view = this.decorate(await this.tasks.get(id), 'desktop');
+      const cached = this.nativeCache.get(id);
+      let saved;
+      try { saved = await this.tasks.get(id); } catch (savedError) { if (!cached) throw savedError; }
+      const fallback = saved || cached;
+      const view = this.decorate({ ...fallback, thread: { ...fallback.thread, messages: mergeHistory(transcriptMessages(cached?.thread.messages || []), transcriptMessages(saved?.thread.messages || [])) } }, 'desktop');
       view.thread.nativeError = this.lastNativeError;
       return view;
     }
@@ -188,6 +207,7 @@ export class DesktopTasks {
       const view = await this.nativeRead(id, true);
       if (!view.thread.capabilities.send) throw new AccessError(409, '当前原生连接不支持发送指令，请在桌面端操作。');
       const args = { threadId: id, hostId: 'local', prompt };
+      const receipt = this.submitted.begin(id, prompt, view.thread.messages);
       if (choice(options.model) || choice(options.effort)) {
         if (choice(options.model) && !view.thread.capabilities.modelSelection) throw new AccessError(409, '此原生接口不支持切换模型，请沿用桌面设置。');
         if (choice(options.effort) && !view.thread.capabilities.effortSelection) throw new AccessError(409, '此原生接口不支持切换推理强度，请沿用桌面设置。');
@@ -199,13 +219,15 @@ export class DesktopTasks {
         if (args.thinking && Array.isArray(advertised) && !advertised.includes(args.thinking)) throw new AccessError(400, '原生桌面接口不支持所选推理强度。');
       }
       attempted = true;
-      unpack(await this.desktop.call('send_message_to_thread', args, { callerThreadId: id, hostId: 'local' }), true);
+      const acknowledgement = unpack(await this.desktop.call('send_message_to_thread', args, { callerThreadId: id, hostId: 'local' }), true);
+      if (acknowledgement.accepted === false) throw new Error('桌面没有接受该指令。');
+      this.submitted.accept(receipt, acknowledgement.turnId || acknowledgement.turn?.id || null);
       this.nativeCache.delete(id);
       this.nativeListTime = 0;
-      try { return await this.nativeRead(id, true); }
+      try { return { ...await this.nativeRead(id, true), accepted: true, submissionId: receipt.id }; }
       catch (readError) {
         this.failed(readError);
-        return { ...view, accepted: true, refreshPending: true, thread: { ...view.thread, status: 'running', readAt: 0, nativeHint: '指令已发送到原生桌面；读取最新状态暂时失败，请刷新查看。' } };
+        return this.decorate({ ...view, accepted: true, submissionId: receipt.id, refreshPending: true, thread: { ...view.thread, status: 'running', readAt: 0, nativeHint: '指令已发送到原生桌面；读取最新状态暂时失败，请刷新查看。' } }, 'desktop', true);
       }
     } catch (error) {
       this.failed(error);

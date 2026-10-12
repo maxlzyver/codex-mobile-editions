@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { Projects } from '../lib/files.mjs';
 
@@ -97,6 +97,40 @@ test('path traversal, absolute paths, Windows ADS and normalization aliases are 
   await assert.rejects(projects.resolveFile(project.id, ''), hasStatus(400));
 });
 
+test('chat references resolve local absolute, encoded, relative and file URI paths with line markers', async t => {
+  const { projects, project, subdir } = await fixture(t);
+  const absolute = path.join(subdir, '结论.txt');
+  for (const reference of [
+    '资料/结论.txt', './资料/结论.txt:12:3', '资料/结论.txt#L12C3', encodeURI('资料/结论.txt'),
+    absolute, `${absolute}:12`, pathToFileURL(absolute).href + '#L12', `sandbox:${absolute}`,
+  ]) {
+    const resolved = await projects.resolveReference(project.id, reference);
+    assert.equal(resolved.projectId, project.id);
+    assert.equal(resolved.path, '资料/结论.txt', reference);
+    assert.equal(resolved.name, '结论.txt');
+    assert.equal(resolved.mime, 'text/plain');
+    assert(resolved.size > 0);
+    assert.equal(resolved.absolutePath, undefined);
+    assert.match((await projects.preview(project.id, resolved.path)).text, /中文/);
+  }
+});
+
+test('chat references cannot cross their selected project or expose private state', async t => {
+  const { projects, project, projectB, outside, runtimeDir, privateAccount } = await fixture(t);
+  await writeFile(path.join(projectB, 'other.txt'), 'Another authorized project');
+  for (const reference of [path.join(outside, 'outside.txt'), path.join(projectB, 'other.txt')]) {
+    await assert.rejects(projects.resolveReference(project.id, reference), hasStatus(403));
+  }
+  for (const reference of [path.join(runtimeDir, 'devices.json'), pathToFileURL(path.join(privateAccount, 'auth.json')).href]) {
+    await assert.rejects(projects.resolveReference(project.id, reference), hasStatus(403));
+  }
+  for (const reference of ['../Outside/outside.txt', '%2e%2e%2fOutside%2foutside.txt', 'javascript:alert(1)', 'https://example.com/a.pdf', 'file://remote-server/share/a.txt', 'README.md:secret', 'README.md::$DATA', 'README.md%00', 'sandbox:relative.txt']) {
+    await assert.rejects(projects.resolveReference(project.id, reference), hasStatus(400), reference);
+  }
+  await assert.rejects(projects.resolveReference(project.id, 'missing.txt'), hasStatus(404));
+  await assert.rejects(projects.resolveReference(project.id, '资料'), hasStatus(400));
+});
+
 test('private state is hidden and denied while normal project JSON remains readable', async t => {
   const { projects, project } = await fixture(t);
   const root = await projects.browse(project.id);
@@ -124,6 +158,8 @@ test('directory links cannot escape a project or expose private state', async t 
     throw error;
   }
   await assert.rejects(projects.resolveFile(project.id, 'escape/outside.txt'), hasStatus(403));
+  await assert.rejects(projects.resolveReference(project.id, 'escape/outside.txt'), hasStatus(403));
+  await assert.rejects(projects.resolveReference(project.id, 'private-link/auth.json'), hasStatus(403));
   await assert.rejects(projects.browse(project.id, 'escape'), hasStatus(403));
   await assert.rejects(projects.preview(project.id, 'private-link/auth.json'), hasStatus(403));
   const names = (await projects.browse(project.id)).entries.map(entry => entry.name);
@@ -131,6 +167,7 @@ test('directory links cannot escape a project or expose private state', async t 
   assert.ok(!names.includes('private-link'));
   assert.ok(names.includes('inside-link'));
   assert.match((await projects.preview(project.id, 'inside-link/结论.txt')).text, /UTF-8/);
+  assert.equal((await projects.resolveReference(project.id, 'inside-link/结论.txt')).path, 'inside-link/结论.txt');
 });
 
 test('text preview decodes UTF-8 without modifying files', async t => {

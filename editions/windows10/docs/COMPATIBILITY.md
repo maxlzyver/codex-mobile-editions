@@ -1,8 +1,10 @@
-# Windows 10 专用版 V1.0：兼容性与运行边界
+# Windows 10 专用版 V1.0.1：兼容性与运行边界
 
-版本 1.0.0，作者 maxlzyver，仓库 [maxlzyver/codex-mobile-editions](https://github.com/maxlzyver/codex-mobile-editions)。本版目录固定为 `editions/windows10`，不能与其他平台文件混用。
+版本 1.0.1，作者 maxlzyver，仓库 [maxlzyver/codex-mobile-editions](https://github.com/maxlzyver/codex-mobile-editions)。本版目录固定为 `editions/windows10`，不能与其他平台文件混用。
 
 ## 平台与已验证范围
+
+以下已完成的验证结果来自 V1.0.0 基线；V1.0.1 的本次回归结果以发布记录和对应 Actions 运行结果为准。
 
 | 项目 | 要求与边界 |
 | --- | --- |
@@ -33,7 +35,7 @@
 - 原生发送失败或超时不会切换到另一连接自动补发。超时可能发生在桌面已接受指令之后，先查看状态再决定是否重发。
 - 助手自行创建的任务可在网页处理受支持的审批与停止，共享文件与账户，不继承原桌面聊天的专有工具环境。
 
-内部桌面接口不是稳定公开 API。自动化测试对原生写入参数和失败路径采用模拟接口，本轮没有向真实用户聊天发送测试指令。
+内部桌面接口不是稳定公开 API。自动化测试对原生写入参数和失败路径采用模拟接口，上述基线验证没有向真实用户聊天发送测试指令。
 
 ## 文件和权限
 

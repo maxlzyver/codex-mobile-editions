@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createConsole, lanAddresses } from '../server.mjs';
 
@@ -390,6 +390,7 @@ test('unpaired and revoked devices cannot list, preview or download project file
   const project = await f.defaultProject(owner);
   const phone = await f.pair(owner);
   const routes = ['files', 'preview', 'download', 'content'].map(action => `/api/projects/${project.id}/${action}?path=result.txt`);
+  routes.push(`/api/projects/${project.id}/resolve?reference=result.txt`);
   for (const auth of [{}, phone]) for (const route of routes) assert.equal((await f.request(route, auth)).status, 401);
   await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
   assert.equal((await f.request(routes[2], phone)).status, 200);
@@ -503,4 +504,31 @@ test('native HTTP write errors remain explicit and do not fall back to duplicate
   assert.match(response.body.error, /可能已经被接受/);
   assert.equal(desktop.calls.filter(call => call.tool === 'send_message_to_thread').length, 1);
   assert(f.bridge.calls.every(call => ['thread/list', 'thread/read'].includes(call.method)));
+});
+
+test('approved phones resolve chat file references and reuse protected preview/download routes', async t => {
+  const f = await fixture(t);
+  const owner = await f.owner();
+  const phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  const project = await f.defaultProject(owner);
+  const file = path.join(f.projectRoot, '手机 报告.md');
+  await writeFile(file, '# Ready from chat');
+  const reference = pathToFileURL(file).href + '#L1';
+  const route = `/api/projects/${project.id}/resolve?reference=${encodeURIComponent(reference)}`;
+  const result = await f.request(route, phone);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.path, '手机 报告.md');
+  assert.equal(result.body.projectId, project.id);
+  assert.equal(result.body.mime, 'text/markdown');
+  assert.equal(result.body.absolutePath, undefined);
+  const query = `path=${encodeURIComponent(result.body.path)}`;
+  assert.equal((await f.request(`/api/projects/${project.id}/preview?${query}`, phone)).body.text, '# Ready from chat');
+  assert.equal((await f.request(`/api/projects/${project.id}/download?${query}`, phone)).body, '# Ready from chat');
+  await writeFile(path.join(f.fixtureDir, 'outside.txt'), 'not authorized');
+  const escaped = await f.request(`/api/projects/${project.id}/resolve?reference=${encodeURIComponent(path.join(f.fixtureDir, 'outside.txt'))}`, phone);
+  assert.equal(escaped.status, 403);
+  assert.doesNotMatch(JSON.stringify(escaped.body), /not authorized/);
+  await f.request(`/api/devices/${phone.id}/revoke`, { ...owner, method: 'POST', data: {} });
+  assert.equal((await f.request(route, phone)).status, 401);
 });

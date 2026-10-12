@@ -5,6 +5,25 @@ on:
 permissions:
   contents: read
 jobs:
+  mobile-ui:
+    name: Mobile browser regression (three editions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.19.0'
+      - name: Install isolated browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/mobile-ui" --no-audit --no-fund playwright@1.62.1
+          "$RUNNER_TEMP/mobile-ui/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/mobile-ui/node_modules/playwright" >> "$GITHUB_ENV"
+      - name: Verify folding, file links and mobile layout
+        run: node tools/test-mobile-ui.mjs
+      - name: Verify chat file preview and download
+        run: node tools/test-chat-files.mjs
+      - name: Verify submitted messages and polling races
+        run: node tools/test-message-send-ui.mjs
   verify:
     name: ${{ matrix.edition }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
