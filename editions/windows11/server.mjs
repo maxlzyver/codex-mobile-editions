@@ -308,6 +308,7 @@ export async function createConsole(options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const app = await createConsole({ onShutdown: () => process.exit(0) });
+  app.updater.startChecking();
   console.log(`Codex 移动助手 ${APP_INFO.version} is listening on http://127.0.0.1:${app.port}`);
   console.log('Use Start.cmd to open the local owner console. Pairing secrets are not logged.');
   const stop = () => { app.close().finally(() => process.exit(0)); };

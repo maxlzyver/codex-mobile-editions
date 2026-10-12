@@ -17,9 +17,9 @@
       "sha256": "414565396dde7c97f1d83a978f11172c68056e022a72905ac40b35cd3f0d8750"
     },
     {
-      "bytes": 10388,
+      "bytes": 10817,
       "path": "README.md",
-      "sha256": "071a4cb6089e7111e157e3d289e1eb5a1111b445767d5da0faffd375d1876286"
+      "sha256": "abae259e522521d48583f67ad3dbd0e8bcb5e91ba535a0b8964b32b4cd2e5a06"
     },
     {
       "bytes": 106,
@@ -52,9 +52,19 @@
       "sha256": "1d154ca9f8c6eaea755d53cdb5fd5b6268e0e6e8c6711f04b1e34fd12e354e4f"
     },
     {
-      "bytes": 4729,
+      "bytes": 5284,
       "path": "docs/RELEASING.md",
-      "sha256": "0b474c822f70f1ed0e7495fe35ae3aa3c8da8fa1216a62f073e2f57e70bb1c2c"
+      "sha256": "ce6c64db7d5426cb6e284ced3f4eeabef4248e45a7a5983a759da226a1014bff"
+    },
+    {
+      "bytes": 903,
+      "path": "docs/UPDATE-NOTES.md",
+      "sha256": "c474ef53e5b99e32cacd67b3df781605f405c56c4511d54001688418950d2dc1"
+    },
+    {
+      "bytes": 2828,
+      "path": "docs/V1.0.1-REBUILD.md",
+      "sha256": "ccb118524a445b00a527c6b95242267af81ac1609a5a736e5ab5b5d642a399fb"
     },
     {
       "bytes": 257,
@@ -127,9 +137,9 @@
       "sha256": "aef6426d59904bc9dc51b62aab3ae587a5c4fb385a8cc5f294c31f8aed78c37e"
     },
     {
-      "bytes": 25480,
+      "bytes": 27620,
       "path": "lib/updater.mjs",
-      "sha256": "a38e3e8a1cca29e2c9b0ea7a400e63c6ca94c6e448101036ee15452e82bddd55"
+      "sha256": "e70a38eae681da30a61ec6ff5fff10d9d2aa02e573e3706def3e251c85526a27"
     },
     {
       "bytes": 579,
@@ -137,9 +147,9 @@
       "sha256": "f65d517fe5266a410a8188c8f63fc3dfded607e8e2822211bb1161cd4c14bdd8"
     },
     {
-      "bytes": 66683,
+      "bytes": 74102,
       "path": "public/app.js",
-      "sha256": "a2a9ab934b96ce4c6dd71ccc272148c748a1f0d380b2b118ae8a625da7760829"
+      "sha256": "abf7a677ef0ca8690d85b0d15a2c48bc308b2347eacd9d54ca2b042948248c67"
     },
     {
       "bytes": 517,
@@ -147,9 +157,9 @@
       "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
     },
     {
-      "bytes": 30812,
+      "bytes": 32314,
       "path": "public/index.html",
-      "sha256": "867271847b869f81764b864c5272b25dc2745ef9ddf56c37c42232c4fc2c4af4"
+      "sha256": "8797e68e140773c35e70cf993a73cda572606c123d0e41875026b390cd045b43"
     },
     {
       "bytes": 421,
@@ -157,19 +167,19 @@
       "sha256": "83a91372fcd086fecc31e981e95e3e7c6a3172851d0391344297b381731b13b7"
     },
     {
-      "bytes": 16219,
+      "bytes": 17495,
       "path": "public/settings.css",
-      "sha256": "1e8e594ca3ef50283f18f37a2fe82710c1ad368d17c4c336bb21be2997aa9791"
+      "sha256": "b9fc3e1a02b8d19f8f6fd9a575ca5410cc3eb2cdf8640e0e44b8160c669ec3e2"
     },
     {
-      "bytes": 21985,
+      "bytes": 26993,
       "path": "public/settings.js",
-      "sha256": "8985bc03030a0eb3de46b36fe10372436aab208f4b279af22fd13e114b4eb1f0"
+      "sha256": "582f7d6d4c0212f71cc9ba34b960a29519d19f100b957262da9d18ff20d25d62"
     },
     {
-      "bytes": 37441,
+      "bytes": 39232,
       "path": "public/styles.css",
-      "sha256": "a37b6775b059344b6c39dbc8f14b8c078db76900984ba92b044d69a0df33d2c2"
+      "sha256": "e942eb0455ab0ed7495d188d2f586168d42562c15d31896a082a6db009cbc22e"
     },
     {
       "bytes": 121660,
@@ -177,9 +187,9 @@
       "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
     },
     {
-      "bytes": 23877,
+      "bytes": 23908,
       "path": "server.mjs",
-      "sha256": "adfc05d607e8ffb4d980a20a08d9942884e9a7ebc1885a96888efc71972c89cd"
+      "sha256": "575a87e13107bb2a5dc72d20b531dfb0f9c568e27d65833365e293dcddb2c4e0"
     },
     {
       "bytes": 6551,
@@ -237,9 +247,9 @@
       "sha256": "4e01a994f4b3eafe45996700faf11c5d4e8c4f7cceb5c91b0f0a95379906dd06"
     },
     {
-      "bytes": 22358,
+      "bytes": 28842,
       "path": "test/updater.test.mjs",
-      "sha256": "2bd54580b5af5b998e97420e0a65a26d20d5e0cceca3f33c8d21d9544ccc03f6"
+      "sha256": "f057185a17d5aa1570d3420c491d2061b242f17e6a292acb9d3cbc35fc383d95"
     },
     {
       "bytes": 24212,
@@ -259,6 +269,7 @@
   ],
   "name": "Codex 移动助手",
   "platform": "Windows 11 x64",
+  "releaseNotes": "V1.0.1 重制版（软件版本仍为 1.0.1）\n\n- 同一轮的公开过程说明、命令执行、文件修改和工具记录合并到一个“思考与过程”折叠区域，最终答复单独显示。\n- 展开和收起状态在流式刷新、切换聊天与本标签页刷新后保留，不同轮次独立控制。\n- 助手启动后后台检查更新，之后每 6 小时检查；发现更高版本时显示更新说明，不会因提示而自动下载或安装。\n- 可选择本版本不再提示，直到发现下一个新版本；仍可在“设置 → 更新与关于”查看和手动安装。\n- 原有聊天、发送回执、项目文件、模型选择、手机权限、配对、外观和赞助功能全部保留。\n\n本次保持版本号 1.0.1。已安装旧 1.0.1 的用户需按重制版说明手动合并覆盖，并保留 .runtime 与个人项目；1.0.0 专用版可使用检查更新。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
   "version": "1.0.1"

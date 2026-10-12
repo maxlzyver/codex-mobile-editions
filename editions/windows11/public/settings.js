@@ -89,6 +89,10 @@
   let updateBusy = false;
   let updateLoading = false;
   let updateTimer = null;
+  let updateReadRevision = 0;
+  let updateIdentityEpoch = 0;
+  let activeUpdateNoticeVersion = '';
+  const shownUpdateVersions = new Set();
   function selectTab(name) {
     activeTab = name;
     tabs.forEach((tab) => {
@@ -97,7 +101,7 @@
       $(tab.getAttribute('aria-controls')).classList.toggle('hidden', !active);
     });
     if (name === 'about') loadUpdates();
-    else clearTimeout(updateTimer);
+    else scheduleUpdateRefresh();
     if (name === 'permissions') loadPermissions();
   }
   tabs.forEach((tab, index) => {
@@ -116,7 +120,7 @@
     const rect = dialog.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
   });
-  dialog.addEventListener('close', () => clearTimeout(updateTimer));
+  dialog.addEventListener('close', scheduleUpdateRefresh);
   const supportDialog = $('support-dialog');
   $('support-open').addEventListener('click', () => supportDialog.showModal());
   $('support-close').addEventListener('click', () => supportDialog.close());
@@ -147,6 +151,7 @@
   const preferencePrefix = storageKey.replace('appearance.v1', '');
   const noticeKey = preferencePrefix + 'notice.lastVersion';
   const guideKey = preferencePrefix + 'permissions-guide-dismissed.v1';
+  const updateDismissKey = preferencePrefix + 'updates.dismissedVersion';
   try { guideDismissed = localStorage.getItem(guideKey) === 'true'; } catch {}
   function renderPermissions() {
     for (const [field, name] of Object.entries(permissionFields)) {
@@ -162,6 +167,9 @@
   }
   function receiveIdentity(data) {
     identityEpoch++;
+    const incomingVersion = data.app?.version;
+    if (role !== (data.role || 'anonymous') || csrf !== (data.csrfToken || '')
+      || typeof incomingVersion === 'string' && /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(incomingVersion) && incomingVersion !== currentVersion) updateIdentityEpoch++;
     role = data.role || 'anonymous'; csrf = data.csrfToken || '';
     if (!permissionBusy && !permissionLoading) permissionState = data.permissions || { allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false, canManage: false };
     const version = data.app?.version;
@@ -173,6 +181,15 @@
     const authorized = ['owner', 'controller'].includes(role);
     $('permission-guide').classList.toggle('hidden', !authorized || guideDismissed);
     if (!authorized && $('release-notice').open) $('release-notice').close();
+    if (!authorized) {
+      clearTimeout(updateTimer); updateTimer = null; updateReadRevision++;
+      updateState = null; activeUpdateNoticeVersion = '';
+      if ($('update-notice').open) $('update-notice').close();
+      renderUpdates();
+    } else if (!updateTimer && !updateLoading && !updateBusy) {
+      updateTimer = setTimeout(loadUpdates, 1000);
+    }
+    renderButtons();
     clearTimeout(noticeTimer);
     if (authorized && currentVersion) noticeTimer = setTimeout(() => showReleaseNotice(false), 300);
   }
@@ -236,6 +253,60 @@
   $('release-notice-permissions').addEventListener('click', openPermissionSettings);
   $('release-notice-review').addEventListener('click', () => showReleaseNotice(true));
   renderPermissions();
+  function availableUpdateVersion() {
+    const state = updateState;
+    if (!state?.hasUpdate || !['available', 'prepared', 'waitingForIdle'].includes(state.status)) return '';
+    const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\+[\w.-]+)?$/;
+    if (typeof state.latestVersion !== 'string' || state.latestVersion.length > 100 || typeof state.currentVersion !== 'string' || state.currentVersion.length > 100) return '';
+    const latest = stable.exec(state.latestVersion), current = stable.exec(state.currentVersion);
+    if (!latest || !current) return '';
+    for (let index = 1; index <= 3; index++) {
+      if (BigInt(latest[index]) > BigInt(current[index])) return state.latestVersion;
+      if (BigInt(latest[index]) < BigInt(current[index])) return '';
+    }
+    return '';
+  }
+  function updateNotes() {
+    return typeof updateState?.releaseNotes === 'string' && updateState.releaseNotes.trim()
+      ? updateState.releaseNotes.slice(0, 12000) : '作者暂未提供本版更新说明，可在“更新与关于”中打开 GitHub 发行说明。';
+  }
+  function showUpdateNotice() {
+    if (!['owner', 'controller'].includes(role) || document.hidden) return;
+    const version = availableUpdateVersion();
+    let dismissed = '';
+    try { dismissed = localStorage.getItem(updateDismissKey) || ''; } catch {}
+    if (!version || version === dismissed || shownUpdateVersions.has(version) || document.querySelector('dialog[open]')) return;
+    activeUpdateNoticeVersion = version;
+    $('update-notice-version').textContent = '发现新版本 · V' + version;
+    $('update-notice-notes').textContent = updateNotes();
+    $('update-notice-permission').textContent = role === 'owner'
+      ? '查看更新后可决定是否安装；后台检查不会替你开启自动安装。'
+      : '这台电脑有新版本可用。请在电脑端安装，手机可查看更新说明。';
+    $('update-notice-skip').checked = false;
+    $('update-notice').showModal();
+    shownUpdateVersions.add(version);
+  }
+  $('update-notice-close').addEventListener('click', () => $('update-notice').close());
+  $('update-notice-later').addEventListener('click', () => $('update-notice').close());
+  $('update-notice-view').addEventListener('click', () => {
+    $('update-notice').close();
+    if (!['owner', 'controller'].includes(role)) return;
+    if (!dialog.open) dialog.showModal();
+    selectTab('about');
+  });
+  $('update-notice').addEventListener('close', () => {
+    if (activeUpdateNoticeVersion && ['owner', 'controller'].includes(role) && $('update-notice-skip').checked) {
+      try { localStorage.setItem(updateDismissKey, activeUpdateNoticeVersion); } catch {}
+    }
+    activeUpdateNoticeVersion = '';
+  });
+  for (const popup of document.querySelectorAll('dialog')) popup.addEventListener('close', () => setTimeout(showUpdateNotice, 0));
+  function refreshVisibleUpdates() {
+    clearTimeout(updateTimer); updateTimer = null;
+    if (!document.hidden && ['owner', 'controller'].includes(role)) { loadUpdates(); showUpdateNotice(); }
+  }
+  document.addEventListener('visibilitychange', refreshVisibleUpdates);
+  window.addEventListener('online', refreshVisibleUpdates);
   function accessMessage() {
     return role === 'owner' ? '更新安装在这台电脑上，手机端会随之使用新版本。' : role === 'controller' ? '请在电脑端控制台管理更新；此设备可以查看更新状态。' : '连接并批准设备后，可查看这台电脑的更新状态。';
   }
@@ -276,24 +347,37 @@
     const releaseUrl = typeof state.releaseUrl === 'string' && /^https:\/\/github\.com\/maxlzyver\/codex-mobile-editions(?:\/|$)/i.test(state.releaseUrl) ? state.releaseUrl : null;
     $('update-release').classList.toggle('hidden', !releaseUrl);
     if (releaseUrl) $('update-release').href = releaseUrl;
+    const hasNotes = typeof state.releaseNotes === 'string' && state.releaseNotes.trim();
+    $('update-notes-box').classList.toggle('hidden', !hasNotes);
+    $('update-notes-body').textContent = hasNotes ? state.releaseNotes.slice(0, 12000) : '';
     const amount = typeof state.progress === 'number' ? state.progress : state.progress?.total > 0
       ? state.progress.received / state.progress.total * 100 : Number(state.progress?.percent);
     $('update-progress').classList.toggle('hidden', status !== 'downloading');
     if (Number.isFinite(amount)) $('update-progress').value = Math.max(0, Math.min(100, amount));
     else $('update-progress').removeAttribute('value');
+    showUpdateNotice();
   }
   function scheduleUpdateRefresh() {
-    clearTimeout(updateTimer);
-    if (dialog.open && activeTab === 'about' && ['owner', 'controller'].includes(role)) updateTimer = setTimeout(loadUpdates, ['checking', 'downloading', 'prepared', 'waitingForIdle', 'installing'].includes(updateState?.status) ? 1600 : 12000);
+    clearTimeout(updateTimer); updateTimer = null;
+    if (document.hidden || !['owner', 'controller'].includes(role)) return;
+    const inPanel = dialog.open && activeTab === 'about';
+    const delay = inPanel ? ['checking', 'downloading', 'prepared', 'waitingForIdle', 'installing'].includes(updateState?.status) ? 1600 : 12000 : 30000;
+    updateTimer = setTimeout(loadUpdates, delay);
   }
   async function loadUpdates() {
     if (updateLoading || updateBusy) return;
     updateLoading = true;
+    const revision = updateReadRevision;
+    const epoch = updateIdentityEpoch;
     try {
-      if (await identity()) updateState = await request('/api/updates');
-      else updateState = null;
+      if (['owner', 'controller'].includes(role)) {
+        const next = await request('/api/updates');
+        if (revision !== updateReadRevision || epoch !== updateIdentityEpoch || !['owner', 'controller'].includes(role)) return;
+        updateState = next;
+      } else updateState = null;
       renderUpdates();
     } catch (error) {
+      if (revision !== updateReadRevision || epoch !== updateIdentityEpoch) return;
       renderUpdates();
       $('update-status').textContent = updateState?.status === 'installing' ? '正在重启移动助手，请稍候…' : '暂时无法获取更新状态';
       $('update-detail').textContent = error.message;
@@ -302,15 +386,19 @@
   }
   async function changeUpdate(path, payload) {
     if (updateBusy || role !== 'owner') return;
+    const revision = ++updateReadRevision;
+    const epoch = updateIdentityEpoch;
     const previousState = updateState;
     if (path === '/api/updates/settings') updateState = { ...updateState, autoUpdate: payload.autoUpdate };
     if (path === '/api/updates/check') updateState = { ...updateState, status: 'checking', error: null, reason: null };
     updateBusy = true; clearTimeout(updateTimer); renderUpdates();
     try {
-      if (!(await identity()) || role !== 'owner') throw new Error('请在电脑端控制台管理更新。');
-      updateState = await request(path, payload);
+      const next = await request(path, payload);
+      if (revision !== updateReadRevision || epoch !== updateIdentityEpoch || role !== 'owner') return;
+      updateState = next;
       renderUpdates();
     } catch (error) {
+      if (revision !== updateReadRevision || epoch !== updateIdentityEpoch || role !== 'owner') return;
       updateState = previousState;
       renderUpdates();
       $('update-status').textContent = '操作未完成'; $('update-detail').textContent = error.message; $('update-detail').classList.remove('hidden');

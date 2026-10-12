@@ -23,6 +23,12 @@ function timers() {
   const active = new Set();
   return { active, setTimeout(fn, delay) { const timer = { fn, delay, unref() {} }; active.add(timer); return timer; }, clearTimeout(timer) { active.delete(timer); } };
 }
+async function fireTimer(clock, delay) {
+  const timer = [...clock.active].find(timer => timer.delay === delay);
+  assert.ok(timer, `Expected timer for ${delay} ms`);
+  clock.active.delete(timer);
+  await timer.fn();
+}
 async function fixture(t, { routes = new Map(), ...options } = {}) {
   await mkdir(WORK, { recursive: true });
   const rootDir = await mkdtemp(path.join(WORK, 'edition-updater-test-'));
@@ -321,4 +327,102 @@ test('a redirect to a different commit is rejected even inside the correct editi
   const r=repository(); r.routes.set(RAW,()=>reply('',302,{location:RAW.replace(COMMIT,NEXT_COMMIT)}));
   const f=await fixture(t,r); await assert.rejects(f.manager.check(),/其他提交/);
   assert.equal(f.calls.length,2); assert.equal(f.scheduled.length,0);
+});
+
+test('opt-in background checking finds updates every six hours with autoUpdate false and never downloads or installs', async t => {
+  const clock = timers(), f = await fixture(t, { ...repository({ manifest: { releaseNotes: '新版说明\n保留原有功能。' } }), ...clock });
+  assert.equal(clock.active.size, 0, 'construction must not opt into network checks');
+  f.manager.startChecking(); f.manager.startChecking();
+  assert.equal(clock.active.size, 1, 'startChecking is idempotent');
+  assert.equal(f.calls.length, 0, 'startup check is deferred');
+  await fireTimer(clock, 0);
+  assert.equal(f.manager.getState().autoUpdate, false);
+  assert.equal(f.manager.getState().status, 'available');
+  assert.equal(f.manager.getState().releaseNotes, '新版说明\n保留原有功能。');
+  assert.deepEqual(f.calls.map(call => call.url), [REPOSITORY_COMMIT_URL, RAW]);
+  assert.equal(f.manager.prepared, null); assert.equal(f.scheduled.length, 0);
+  assert.equal(clock.active.size, 1);
+  await fireTimer(clock, 6 * 60 * 60 * 1000);
+  assert.equal(f.calls.length, 4); assert.equal(f.scheduled.length, 0); assert.equal(f.manager.prepared, null);
+  assert.equal(f.calls.some(call => call.url === ARCHIVE), false);
+});
+
+test('background checking waits for a competing operation and does not disturb scheduled installation', async t => {
+  const clock = timers(), gate = defer(), entered = defer(), r = repository();
+  r.routes.set(REPOSITORY_COMMIT_URL, () => { entered.resolve(); return gate.promise; });
+  const f = await fixture(t, { ...r, ...clock });
+  f.manager.startChecking();
+  const manual = f.manager.check(); await entered.promise;
+  await fireTimer(clock, 0);
+  assert.equal(f.calls.length, 1); assert.equal(f.manager.getState().status, 'checking');
+  assert.ok([...clock.active].some(timer => timer.delay === 60000));
+  gate.resolve(reply(json({ sha: COMMIT }))); await manual;
+  await f.manager.install(); assert.equal(f.scheduled.length, 1);
+  const calls = f.calls.length;
+  await fireTimer(clock, 60000);
+  assert.equal(f.calls.length, calls); assert.equal(clock.active.size, 0);
+  assert.equal(f.manager.getState().status, 'installing');
+});
+
+test('check-only and automatic-update schedulers transfer ownership without duplicate checks', async t => {
+  const clock = timers(), f = await fixture(t, { ...repository(), ...clock });
+  f.manager.startChecking();
+  await f.manager.configure({ autoUpdate: true });
+  assert.equal(f.manager.checkTimer, null); assert.equal(clock.active.size, 1);
+  await f.manager.checkOnlyCycle(); assert.equal(f.calls.length, 0, 'auto scheduler owns this period');
+  await f.manager.configure({ autoUpdate: false });
+  assert.equal(f.manager.timer, null); assert.equal(clock.active.size, 1);
+  await fireTimer(clock, 0);
+  assert.equal(f.calls.length, 2); assert.equal(f.scheduled.length, 0);
+});
+
+test('closing background checking aborts an active request and never reschedules its timer', async t => {
+  const clock = timers(), entered = defer();
+  const f = await fixture(t, { ...clock, fetchImpl: (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true }); entered.resolve();
+  }) });
+  f.manager.startChecking();
+  const checking = fireTimer(clock, 0); await entered.promise;
+  await f.manager.close(); await checking;
+  assert.equal(clock.active.size, 0); assert.equal(f.scheduled.length, 0);
+  assert.throws(() => f.manager.startChecking(), { status: 409 });
+  const g = await fixture(t, { ...repository(), ...clock });
+  g.manager.startChecking(); await g.manager.close(); assert.equal(clock.active.size, 0);
+});
+
+test('a stale background cycle cannot replace a timer created by an auto-update setting change', async t => {
+  const clock = timers(), gate = defer(), entered = defer(), r = repository();
+  r.routes.set(REPOSITORY_COMMIT_URL, () => { entered.resolve(); return gate.promise; });
+  const f = await fixture(t, { ...r, ...clock }); f.manager.startChecking();
+  const checking = fireTimer(clock, 0); await entered.promise;
+  await f.manager.configure({ autoUpdate: true }); await f.manager.configure({ autoUpdate: false });
+  gate.resolve(reply(json({ sha: COMMIT }))); await checking;
+  assert.equal(clock.active.size, 1); assert.equal([...clock.active][0].delay, 0);
+  assert.equal(f.scheduled.length, 0);
+});
+
+test('background check failure waits six hours without triggering archive download or install', async t => {
+  const clock = timers(), f = await fixture(t, { ...clock, routes: new Map([[REPOSITORY_COMMIT_URL, () => reply('', 403)]]) });
+  f.manager.startChecking(); await fireTimer(clock, 0);
+  assert.equal(f.manager.getState().status, 'error'); assert.equal(f.scheduled.length, 0);
+  assert.equal(f.calls.length, 1); assert.equal([...clock.active][0].delay, 6 * 60 * 60 * 1000);
+});
+
+test('release notes are optional bounded plain text from the matching pinned manifest only', async t => {
+  const notes = '更新说明\r\n<script>alert(1)</script>\nhttps://example.invalid/notes';
+  const f = await fixture(t, repository({ manifest: { releaseNotes: notes } }));
+  const state = await f.manager.check();
+  assert.equal(state.releaseNotes, notes.replace('\r\n', '\n'));
+  assert.deepEqual(f.calls.map(call => call.url), [REPOSITORY_COMMIT_URL, RAW], 'notes must not load linked resources');
+  f.routes.set(RAW, json(repository().manifest));
+  assert.equal((await f.manager.check()).releaseNotes, '', 'older manifests clear stale notes');
+  f.routes.set(RAW, () => reply('', 404));
+  assert.equal((await f.manager.check()).releaseNotes, '');
+  for (const releaseNotes of [null, {}, [], true, 123, 'x'.repeat(12001), 'x\u0000y', 'x\u001by', '😀'.repeat(6001)]) {
+    const g = await fixture(t, repository({ manifest: { releaseNotes } }));
+    await assert.rejects(g.manager.check(), /更新说明/); assert.equal(g.calls.length, 2); assert.equal(g.scheduled.length, 0);
+    assert.equal(g.manager.getState().releaseNotes, '');
+  }
+  const other = await fixture(t, repository({ manifest: { edition: PROFILE.id === 'macos' ? 'windows11' : 'macos', releaseNotes: '其他平台说明' } }));
+  await assert.rejects(other.manager.check(), /平台/); assert.equal(other.manager.getState().releaseNotes, '');
 });

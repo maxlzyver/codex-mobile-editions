@@ -34,11 +34,22 @@
     outgoing: new Map(), outgoingSequence: 0, conversationGeneration: 0, readRevision: 0, lastSubmissionWarning: '',
     role: 'loading', csrf: '', bootstrap: null, activeId: null, threads: [], thread: null,
     pairing: null, pairMode: 'lan', pairingBusy: false, pairToken: '', sending: false,
-    readBusy: false, statusBusy: false, devicesBusy: false, lastMessages: '', lastApprovals: '', messageDisclosure: new Map(),
+    readBusy: false, statusBusy: false, devicesBusy: false, lastMessages: '', lastApprovals: '', messageDisclosure: new Map(), processGroupKeys: new Map(), processGroupOwners: new Map(),
     lastThreads: '', lastDevices: '', lastStatus: '', connected: true, toastTimer: null, authTimer: null,
     wantInternetPair: false, shownReady: false, activeReadOnly: false, lanUrl: '', lastThreadError: '',
     models: [], projects: [], projectId: '', filesProjectId: '', filePath: '', filesGeneration: 0, projectsGeneration: 0, accessRevision: 0, selectionThread: null, view: 'chat', modelsBusy: false,
   };
+  const disclosureStorageKey = `codex-mobile.${document.documentElement.dataset.edition || 'web'}.process-disclosures.v2`;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(disclosureStorageKey) || '[]');
+    if (Array.isArray(saved)) for (const entry of saved.slice(-400)) {
+      if (Array.isArray(entry) && typeof entry[0] === 'string' && entry[0].length <= 3000 && typeof entry[1] === 'boolean') state.messageDisclosure.set(entry[0], entry[1]);
+    }
+  } catch { /* Private browsing can disable session storage; in-memory state still works. */ }
+  function saveDisclosures() {
+    while (state.messageDisclosure.size > 400) state.messageDisclosure.delete(state.messageDisclosure.keys().next().value);
+    try { sessionStorage.setItem(disclosureStorageKey, JSON.stringify([...state.messageDisclosure])); } catch {}
+  }
   const hidden = (id, value) => $(id).classList.toggle('hidden', value);
   const node = (tag, className, text) => {
     const el = document.createElement(tag);
@@ -488,50 +499,148 @@
     } catch (error) { if (current()) toast(error.message); }
     finally { if (button.isConnected) button.disabled = false; }
   }
-  function renderMessages(messages, running) {
-    const list = $('messages');
-    // Capture the native disclosure state before streaming replaces its DOM.
-    for (const detail of list.querySelectorAll('details[data-disclosure-key]')) {
-      state.messageDisclosure.set(detail.dataset.disclosureKey, detail.open);
+  function publicMessageRole(item) {
+    if (item.role === 'user' || item.type === 'userMessage') return 'user';
+    const type = String(item.type || '').toLowerCase();
+    if (item.role === 'tool' || /^(command|commandexecution|tool|filechange|mcptoolcall|dynamictoolcall|collabtoolcall|collabagenttoolcall|websearch|imagesearch)$/.test(type)) return 'tool';
+    return 'assistant';
+  }
+  function processGroupKey(group, claimed) {
+    const thread = state.activeId || `new:${state.conversationGeneration}`;
+    const canonical = JSON.stringify([thread, group.turnId ? ['turn', group.turnId] : ['round', group.anchor]]);
+    const aliases = [canonical, ...group.records.map(record => JSON.stringify([thread, 'process-item', record.item.id || ['position', record.index, record.item.type || record.role]])), JSON.stringify([thread, 'boundary', group.anchor])];
+    const candidates = aliases.map(alias => state.processGroupKeys.get(alias)).filter(Boolean);
+    const prior = candidates.find(value => !claimed.has(value.key) && (!group.turnId || !value.turnId || value.turnId === group.turnId) && (!group.turnId || !state.processGroupOwners.has(value.key) || state.processGroupOwners.get(value.key) === group.turnId));
+    const identity = { key: prior?.key || canonical, turnId: group.turnId || prior?.turnId || null };
+    // A previously unknown round may split when IDs arrive. Its children must not share a switch.
+    if (!prior && !state.messageDisclosure.has(identity.key)) {
+      const inherited = candidates.find(value => state.messageDisclosure.has(value.key));
+      if (inherited) state.messageDisclosure.set(identity.key, state.messageDisclosure.get(inherited.key));
     }
-    list.replaceChildren();
+    claimed.add(identity.key);
+    if (identity.turnId) state.processGroupOwners.set(identity.key, identity.turnId);
+    for (const alias of aliases) state.processGroupKeys.set(alias, identity);
+    // If upstream fills in a turn ID later, also retain its canonical switch for a full page reload.
+    if (canonical !== identity.key && state.messageDisclosure.has(identity.key)) state.messageDisclosure.set(canonical, state.messageDisclosure.get(identity.key));
+    return identity.key;
+  }
+  function conversationRows(messages, running) {
+    const entries = [], segments = [];
+    let segment;
+    const startSegment = (anchor, turnId = null) => {
+      segment = { anchor, turnId, records: [] }; segments.push(segment);
+    };
+    startSegment(['start']);
     for (const [index, item] of messages.entries()) {
+      // The bridge only supplies public records. Never render raw internal reasoning if a future source includes it.
+      if (/reasoning/i.test(String(item.type || '')) || item.role === 'reasoning' || item.phase === 'analysis') continue;
       const content = messageText(item);
       if (!content) continue;
-      const role = item.role === 'user' ? 'user' : item.role === 'tool' || ['command', 'commandExecution', 'tool', 'fileChange'].includes(item.type) ? 'tool' : 'assistant';
-      // Only public progress messages are collapsible; final answers remain visible.
-      const process = role === 'assistant' && item.phase === 'commentary';
-      const article = node('article', `message ${role}`);
-      article.append(node('div', 'message-avatar', role === 'user' ? '我' : role === 'tool' ? '⌘' : 'C'));
-      const body = node('div', 'message-body');
-      const heading = node('div', 'message-name', role === 'user' ? '你' : role === 'tool' ? item.title || '执行记录' : 'Codex');
-      if (item.createdAt) heading.append(node('time', '', dateLabel(item.createdAt)));
-      const delivery = role === 'user' && ({ sending: '发送中…', failed: '发送失败', uncertain: '结果未确认', sent: '已发送' })[item.delivery];
-      if (delivery) {
-        const label = node('span', 'message-delivery', delivery);
-        label.dataset.status = item.delivery;
-        heading.append(label);
-      }
-      body.append(heading);
-      const pre = node('pre', 'message-content');
-      renderMessageContent(pre, content, { threadId: state.activeId, cwd: state.thread?.cwd });
-      if (role === 'tool' || process) {
-        const detail = node('details', `message-disclosure${process ? ' message-process' : ''}`);
-        const key = JSON.stringify([state.activeId, item.id ? ['id', item.id] : ['position', item.turnId || '', item.type || role, index]]);
-        detail.dataset.messageId = item.id || '';
-        detail.dataset.disclosureKey = key;
-        detail.open = state.messageDisclosure.get(key) === true;
-        detail.addEventListener('toggle', () => {
-          if (detail.isConnected) state.messageDisclosure.set(key, detail.open);
-        });
-        detail.append(node('summary', '', process ? '思考与过程' : item.title || String(content).split('\n')[0].slice(0, 100)), pre);
-        body.append(detail);
-      } else body.append(pre);
-      article.append(body);
-      list.append(article);
+      const role = publicMessageRole(item);
+      const record = { item, index, content, role, process: role === 'tool' || role === 'assistant' && item.phase === 'commentary' };
+      if (role === 'user') startSegment(['user', item.id || index], item.turnId || null);
+      if (record.process) { record.segment = segment; segment.records.push(record); }
+      entries.push(record);
+      // Legacy assistant messages without phase remain outside, just like explicit final answers.
+      if (role === 'assistant' && !record.process) startSegment(['after-answer', item.id || index]);
     }
-    if (running) list.append(node('div', 'turn-activity', 'Codex 正在工作，内容会实时更新…'));
-    else if (!messages.length) list.append(node('p', 'list-empty', '这个任务还没有消息。发送一条指令，继续工作。'));
+    const groups = new Map();
+    for (const section of segments) {
+      const firstTurn = section.records.find(record => record.item.turnId)?.item.turnId;
+      let turnId = section.turnId || firstTurn || null;
+      for (const record of section.records) {
+        turnId = record.item.turnId || turnId;
+        const anchor = section.anchor[0] === 'start' && section.records[0]?.item.id ? ['first-process', section.records[0].item.id] : section.anchor;
+        const identity = JSON.stringify(turnId ? ['turn', turnId] : ['round', anchor]);
+        if (!groups.has(identity)) groups.set(identity, { turnId, anchor, records: [], running: false });
+        record.group = groups.get(identity); record.group.records.push(record);
+      }
+    }
+    let activeGroup;
+    if (running) {
+      const activeTurn = state.thread?.turnId;
+      activeGroup = activeTurn ? [...groups.values()].find(group => group.turnId === activeTurn) : null;
+      const last = entries.at(-1);
+      const lastProcess = entries.findLast(entry => entry.process);
+      const lastAnswer = entries.findLast(entry => entry.role === 'assistant' && !entry.process);
+      // A queued/steered user message remains outside the currently running turn's group.
+      if (!activeGroup && !activeTurn && lastProcess && (!lastAnswer || lastProcess.index > lastAnswer.index || last === lastAnswer)) activeGroup = lastProcess.group;
+      if (!activeGroup) {
+        const identity = JSON.stringify(activeTurn ? ['turn', activeTurn] : ['round', segment.anchor]);
+        activeGroup = groups.get(identity) || { turnId: activeTurn || segment.turnId, anchor: segment.anchor, records: [], running: false };
+        groups.set(identity, activeGroup);
+      }
+      activeGroup.running = true;
+    }
+    const rows = [], rendered = new Set();
+    for (const entry of entries) {
+      if (!entry.process) rows.push(entry);
+      else if (!rendered.has(entry.group)) { rows.push(entry.group); rendered.add(entry.group); }
+    }
+    if (activeGroup && !rendered.has(activeGroup)) rows.push(activeGroup);
+    const claimed = new Set();
+    for (const group of groups.values()) group.key = processGroupKey(group, claimed);
+    return rows;
+  }
+  function retainDisclosure(detail, key) {
+    detail.dataset.disclosureKey = key;
+    detail.open = state.messageDisclosure.get(key) === true;
+    detail.addEventListener('toggle', () => {
+      if (!detail.isConnected) return;
+      state.messageDisclosure.delete(key); state.messageDisclosure.set(key, detail.open);
+      for (const [alias, identity] of state.processGroupKeys) {
+        if (identity.key === key && alias.includes('[\"turn\",')) state.messageDisclosure.set(alias, detail.open);
+      }
+      saveDisclosures();
+    });
+  }
+  function messageArticle(record) {
+    const { item, index, content, role } = record;
+    const article = node('article', `message ${role}`);
+    article.dataset.messageId = item.id || '';
+    if (item.phase) article.dataset.phase = item.phase;
+    article.append(node('div', 'message-avatar', role === 'user' ? '我' : role === 'tool' ? '⌘' : 'C'));
+    const body = node('div', 'message-body');
+    const heading = node('div', 'message-name', role === 'user' ? '你' : role === 'tool' ? item.title || '执行记录' : 'Codex');
+    if (item.createdAt) heading.append(node('time', '', dateLabel(item.createdAt)));
+    const delivery = role === 'user' && ({ sending: '发送中…', failed: '发送失败', uncertain: '结果未确认', sent: '已发送' })[item.delivery];
+    if (delivery) {
+      const label = node('span', 'message-delivery', delivery); label.dataset.status = item.delivery; heading.append(label);
+    }
+    body.append(heading);
+    const pre = node('pre', 'message-content');
+    renderMessageContent(pre, content, { threadId: state.activeId, cwd: state.thread?.cwd });
+    if (role === 'tool') {
+      const detail = node('details', 'message-disclosure');
+      detail.dataset.messageId = item.id || '';
+      retainDisclosure(detail, JSON.stringify([state.activeId, 'tool', item.id ? ['id', item.id] : ['position', item.turnId || '', item.type || role, index]]));
+      detail.append(node('summary', '', item.title || String(content).split('\n')[0].slice(0, 100)), pre);
+      body.append(detail);
+    } else body.append(pre);
+    article.append(body);
+    return article;
+  }
+  function renderMessages(messages, running) {
+    const list = $('messages');
+    for (const detail of list.querySelectorAll('details[data-disclosure-key]')) state.messageDisclosure.set(detail.dataset.disclosureKey, detail.open);
+    list.replaceChildren();
+    const rows = conversationRows(messages, running);
+    for (const row of rows) {
+      if (!row.records) { list.append(messageArticle(row)); continue; }
+      const detail = node('details', 'process-disclosure');
+      detail.dataset.turnId = row.turnId || ''; detail.dataset.processKey = row.key;
+      retainDisclosure(detail, row.key);
+      const summary = node('summary', 'process-summary');
+      summary.append(node('span', 'process-summary-title', '思考与过程'));
+      if (row.running) summary.append(node('span', 'process-summary-status', '正在进行'));
+      const duration = row.records.map(record => record.item.turnDurationMs).find(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+      if (!row.running && duration !== undefined) summary.append(node('span', 'process-summary-duration', duration < 1000 ? `${Math.round(duration)} 毫秒` : `${Math.round(duration / 100) / 10} 秒`));
+      const body = node('div', 'process-content');
+      for (const record of row.records) body.append(messageArticle(record));
+      if (row.running) body.append(node('div', 'turn-activity', 'Codex 正在工作，内容会实时更新…'));
+      detail.append(summary, body); list.append(detail);
+    }
+    if (!rows.length) list.append(node('p', 'list-empty', '这个任务还没有消息。发送一条指令，继续工作。'));
   }
   function renderApprovals(approvals) {
     $('approvals').replaceChildren();

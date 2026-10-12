@@ -6,10 +6,12 @@
 
 ## V1.0.1 更新
 
-- 公开过程说明（commentary）支持触屏展开与收起，并保留开关选择。
+- 同一轮的公开过程说明、命令执行、文件修改和工具记录统一折叠，默认收起；最终答复与用户指令始终显示，实时刷新和切换聊天保留开关选择。
 - 已确认接收的指令保留本地回执，刷新页面后仍可查看；真实聊天记录同步后自动去重，并清楚区分发送中、待同步和失败状态。
 
 ## 系统与安装
+
+本包为 **V1.0.1 重制版**，保留原版全部功能。已装旧 V1.0.1 时不会提示同版本更新，请按[保留数据换装说明](docs/V1.0.1-REBUILD.md)覆盖程序文件；V1.0.0 可从程序内更新。[重制版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.0.1-rebuild.1)。
 
 - **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.0.1-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
 - Mac 需自行安装并登录兼容的 Codex 桌面应用或 CLI；包内不包含 Codex 程序和账户。

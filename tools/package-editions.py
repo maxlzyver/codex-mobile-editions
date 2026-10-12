@@ -39,6 +39,7 @@ PRIVATE_PARTS = {".runtime", ".codex", ".git", "workspace", "work", "node_module
 PRIVATE_NAMES = {"owner-url.txt", "auth.json", "devices.json", "tasks.json", "sessions.json", "credentials.json"}
 PRIVATE_EXTENSIONS = {".log", ".db", ".sqlite", ".key", ".pem", ".pfx", ".zip", ".tgz", ".gz", ".pyc"}
 ZIP_TIME = (2020, 1, 1, 0, 0, 0)
+MAX_RELEASE_NOTES = 12000
 
 
 class PackagingError(Exception):
@@ -220,11 +221,25 @@ def plan_edition(edition: str, include_tests=False):
     light_entries = [entry for entry in entries if not entry.relative.startswith(("runtime/", "vendor/cloudflared"))]
     require(any(entry.relative == "edition.json" for entry in light_entries), "Update identity was omitted")
     manifest = {"name": "Codex 移动助手", "edition": edition, "version": profile["version"], "platform": profile["platform"],
-                "repository": REPOSITORY, "runtimePolicy": "preserve", "files": [entry.record() for entry in light_entries]}
+                "repository": REPOSITORY, "runtimePolicy": "preserve", "releaseNotes": read_release_notes(base),
+                "files": [entry.record() for entry in light_entries]}
     content = json_bytes(manifest)
     entries.append(Entry("update.json", None, len(content), sha256(content), payload=content))
     entries.sort(key=lambda entry: entry.relative)
     return {"edition": edition, "base": base, "profile": profile, "entries": entries, "manifest": manifest, "manifestBytes": content}
+
+
+def read_release_notes(base: Path) -> str:
+    filename = base / "docs" / "UPDATE-NOTES.md"
+    regular_file(filename)
+    require(filename.stat().st_size <= 48000, "Update notes exceed 48000 UTF-8 bytes")
+    try:
+        notes = filename.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n").strip()
+    except UnicodeError as error:
+        raise PackagingError("Update notes must be UTF-8 text") from error
+    require(len(notes.encode("utf-16-le")) // 2 <= MAX_RELEASE_NOTES, "Update notes exceed 12000 characters")
+    require(not re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", notes), "Update notes contain control characters")
+    return notes
 
 
 def manifest_write(plan) -> None:

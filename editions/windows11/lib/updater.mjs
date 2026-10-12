@@ -10,6 +10,7 @@ export const LATEST_RELEASE_URL = `https://api.github.com/repos/${UPDATE_REPOSIT
 export const REPOSITORY_COMMIT_URL = `https://api.github.com/repos/${UPDATE_REPOSITORY}/commits/main`;
 const MAX_ARCHIVE = 512 * 1024 * 1024;
 const MAX_METADATA = 8 * 1024 * 1024;
+const MAX_RELEASE_NOTES = 12000;
 const checksum = value => typeof value === 'string' && /^[a-f\d]{64}$/i.test(value);
 
 export class UpdateError extends Error {
@@ -95,6 +96,8 @@ function validateRepositoryManifest(manifest, profile) {
   if (!version || version.version !== manifest.version || version.prerelease.length || manifest.repository !== UPDATE_REPOSITORY || manifest.platform !== profile.platform || manifest.edition !== profile.id) throw new UpdateError(502, '仓库 update.json 的稳定版本、仓库或平台不正确。');
   if (!Array.isArray(manifest.files) || !manifest.files.length || manifest.files.length > 10000) throw new UpdateError(502, '仓库更新清单缺少有效文件列表。');
   if (manifest.runtimePolicy !== undefined && manifest.runtimePolicy !== 'preserve') throw new UpdateError(502, '仓库清单的运行库更新策略无效。');
+  if (manifest.releaseNotes !== undefined && (typeof manifest.releaseNotes !== 'string' || manifest.releaseNotes.length > MAX_RELEASE_NOTES
+    || Buffer.byteLength(manifest.releaseNotes, 'utf8') > 48000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(manifest.releaseNotes))) throw new UpdateError(502, '仓库更新说明必须是长度受限的纯文本。');
   const paths = new Set(); let size = 0;
   for (const file of manifest.files) {
     const filename = file?.path;
@@ -131,8 +134,8 @@ export class UpdateManager extends EventEmitter {
     mkdirSync(this.directory, { recursive: true });
     let autoUpdate = false;
     try { autoUpdate = JSON.parse(readFileSync(this.configPath, 'utf8')).autoUpdate === true; } catch {}
-    this.state = { editionId: this.profile.id, platform: this.profile.platform, status: 'idle', currentVersion: current.version, latestVersion: null, autoUpdate, checkedAt: null, releaseUrl: null, source: null, sourceCommit: null, publishedAt: null, progress: null, error: null, reason: '', hasUpdate: false, preparedVersion: null, installScheduled: false };
-    this.release = null; this.prepared = null; this.operation = null; this.timer = null; this.closed = false; this.generation = 0; this.controllers = new Set();
+    this.state = { editionId: this.profile.id, platform: this.profile.platform, status: 'idle', currentVersion: current.version, latestVersion: null, autoUpdate, checkedAt: null, releaseUrl: null, releaseNotes: '', source: null, sourceCommit: null, publishedAt: null, progress: null, error: null, reason: '', hasUpdate: false, preparedVersion: null, installScheduled: false };
+    this.release = null; this.prepared = null; this.operation = null; this.timer = null; this.checkTimer = null; this.checkingEnabled = false; this.closed = false; this.generation = 0; this.controllers = new Set();
     if (autoUpdate) this.schedule(0);
   }
 
@@ -147,9 +150,42 @@ export class UpdateManager extends EventEmitter {
     ++this.generation;
     if (this.timer) this.options.clearTimeout(this.timer);
     this.timer = null;
+    if (this.checkTimer) this.options.clearTimeout(this.checkTimer);
+    this.checkTimer = null;
     this.update({ autoUpdate });
     if (autoUpdate) this.schedule(0);
+    else if (this.checkingEnabled) this.scheduleCheck(0);
     return this.getState();
+  }
+
+  // Explicitly enabled by the real server entry point, never by importing or
+  // constructing a console in a test or another application. This only checks.
+  startChecking() {
+    if (this.closed) throw new UpdateError(409, '更新器已关闭。');
+    if (this.checkingEnabled) return this.getState();
+    this.checkingEnabled = true;
+    this.scheduleCheck(0);
+    return this.getState();
+  }
+
+  scheduleCheck(delay) {
+    if (this.closed || !this.checkingEnabled || this.state.autoUpdate || this.state.installScheduled) return;
+    if (this.checkTimer) this.options.clearTimeout(this.checkTimer);
+    this.checkTimer = this.options.setTimeout(() => { this.checkTimer = null; return this.checkOnlyCycle().catch(() => {}); }, delay);
+    this.checkTimer?.unref?.();
+  }
+
+  async checkOnlyCycle() {
+    if (this.closed || !this.checkingEnabled || this.state.autoUpdate || this.state.installScheduled) return;
+    const generation = this.generation;
+    let delay = this.options.checkIntervalMs;
+    try {
+      if (this.operation) { delay = this.options.idleRetryMs; return; }
+      await this.check();
+    } catch { /* A failed background check records its error and waits until the next interval. */ }
+    finally {
+      if (generation === this.generation) this.scheduleCheck(delay);
+    }
   }
 
   schedule(delay) {
@@ -241,7 +277,7 @@ export class UpdateManager extends EventEmitter {
 
   unavailable() {
     this.release = null; this.prepared = null;
-    return this.update({ status: 'unpublished', checkedAt: new Date(this.options.now()).toISOString(), latestVersion: null, releaseUrl: null, source: null, sourceCommit: null, publishedAt: null, hasUpdate: false, preparedVersion: null, reason: 'GitHub 尚未提供此系统专用版的有效 update.json；这不代表当前版本已经最新。' });
+    return this.update({ status: 'unpublished', checkedAt: new Date(this.options.now()).toISOString(), latestVersion: null, releaseUrl: null, releaseNotes: '', source: null, sourceCommit: null, publishedAt: null, hasUpdate: false, preparedVersion: null, reason: 'GitHub 尚未提供此系统专用版的有效 update.json；这不代表当前版本已经最新。' });
   }
 
   async checkInternal() {
@@ -256,7 +292,7 @@ export class UpdateManager extends EventEmitter {
     let manifest; try { manifest = JSON.parse(metadata.toString('utf8')); } catch { throw new UpdateError(502, '仓库 update.json 不是有效 JSON。'); }
     const version = validateRepositoryManifest(manifest, this.profile);
     const releaseUrl = 'https://github.com/' + UPDATE_REPOSITORY + '/tree/' + commit.sha;
-    const details = { checkedAt: new Date(this.options.now()).toISOString(), latestVersion: version.version, releaseUrl, source: 'repository', sourceCommit: commit.sha, publishedAt: commit.commit?.committer?.date || null };
+    const details = { checkedAt: new Date(this.options.now()).toISOString(), latestVersion: version.version, releaseUrl, releaseNotes: (manifest.releaseNotes || '').replace(/\r\n?/g, '\n').trim(), source: 'repository', sourceCommit: commit.sha, publishedAt: commit.commit?.committer?.date || null };
     if (compareVersions(version.version, this.state.currentVersion) <= 0) {
       this.release = null; this.prepared = null;
       return this.update({ ...details, status: 'upToDate', hasUpdate: false, preparedVersion: null, reason: '此系统专用版没有更高的稳定版本；不会用其他系统或旧版本覆盖。' });
@@ -337,6 +373,8 @@ export class UpdateManager extends EventEmitter {
   async close() {
     this.closed = true; ++this.generation;
     if (this.timer) this.options.clearTimeout(this.timer); this.timer = null;
+    if (this.checkTimer) this.options.clearTimeout(this.checkTimer); this.checkTimer = null;
+    this.checkingEnabled = false;
     for (const controller of this.controllers) controller.abort(new Error('更新器已关闭。'));
   }
 }

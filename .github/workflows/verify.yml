@@ -26,6 +26,8 @@ jobs:
         run: node tools/test-message-send-ui.mjs
       - name: Verify mobile permissions, directory picker and release notices
         run: node tools/test-permissions-ui.mjs
+      - name: Verify update alerts, release notes and per-version dismissal
+        run: node tools/test-update-notice-ui.mjs
   verify:
     name: ${{ matrix.edition }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -48,6 +50,8 @@ jobs:
           node-version: '24.19.0'
       - name: Verify platform identity and update file hashes
         run: python tools/verify-editions.py --edition ${{ matrix.edition }}
+      - name: Verify update notes packaging
+        run: python tools/test-package-release-notes.py
       - name: Run protocol, file access and update tests
         working-directory: editions/${{ matrix.edition }}
         run: node --test test/*.test.mjs

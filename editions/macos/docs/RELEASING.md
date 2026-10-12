@@ -11,3 +11,9 @@
 Mac ZIP 必须保留 Start.command、Stop.command、Login.command、两套 Node 与 cloudflared 的执行权限和 Unix 换行。工具按此设置 ZIP 属性。禁止包含 `.runtime`、登录资料、项目文件、日志、旧 Windows 启动器和 PowerShell 更新脚本。
 
 不要运行旧 `tools/package-release.mjs`；根发布工具是本仓库唯一打包入口。完整维护步骤见仓库根 [docs/RELEASING.md](../../../docs/RELEASING.md)。
+
+## 新版本说明与提醒
+
+发布前更新本平台的 docs/UPDATE-NOTES.md。根打包工具会将该文件的纯文本写入 update.json.releaseNotes，供新版本弹窗与设置页展示。启动后及每 6 小时只检查新版本；自动安装仍由原开关控制。用户勾选下次更新前不再提示后按版本记忆，下一版本会恢复提醒。
+
+本次 V1.0.1 重制使用独立发布标签 v1.0.1-rebuild.1，已装同版本时需参照 [保留数据换装说明](V1.0.1-REBUILD.md)操作；以后正常发布仍需提高版本。
