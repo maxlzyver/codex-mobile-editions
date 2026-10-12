@@ -10,6 +10,7 @@ import { Tasks } from './lib/tasks.mjs';
 import { CodexBridge } from './lib/codex-bridge.mjs';
 import { TunnelManager } from './lib/tunnel.mjs';
 import { Projects } from './lib/files.mjs';
+import { MobilePermissions } from './lib/permissions.mjs';
 import { DesktopBridge } from './lib/desktop-bridge.mjs';
 import { DesktopTasks } from './lib/desktop-tasks.mjs';
 import { APP_INFO } from './lib/app-info.mjs';
@@ -33,6 +34,7 @@ export async function createConsole(options = {}) {
   mkdirSync(workDirectory, { recursive: true });
   const bridge = options.bridge || new CodexBridge({ cwd: workDirectory });
   const sessions = new Sessions(runtime);
+  const permissions = new MobilePermissions(runtime);
   const companionTasks = new Tasks(bridge, runtime, workDirectory);
   const desktop = options.desktop === false ? null : options.desktop || (options.bridge ? null : new DesktopBridge({ allowWrites: true }));
   const tasks = desktop ? new DesktopTasks(companionTasks, desktop) : companionTasks;
@@ -131,11 +133,13 @@ export async function createConsole(options = {}) {
       // Owner cookies never authorize requests arriving via a tunnel or LAN.
       if (session?.role === 'owner' && !localOwnerRequest(req)) session = null;
       authenticatedRequest = ['owner', 'controller'].includes(session?.role);
+      const projectScope = () => ({ includeMobileRoots: session?.role === 'owner' || permissions.state.allowOtherFiles });
       if (method === 'GET' && url.pathname === '/api/bootstrap') {
         const role = session?.role || 'anonymous';
         const result = { role, csrfToken: session?.csrf || null, session: session ? { id: session.id, name: session.name } : null };
         if (['owner', 'controller'].includes(role)) Object.assign(result, { app: APP_INFO, status: { codex: signedIn === false ? 'error' : bridge.state.connected ? 'connected' : bridge.state.error ? 'error' : 'connecting', mode: bridge.state.mode, version: APP_INFO.version, hostname: os.hostname(), authenticated: signedIn, error: signedIn === false ? '尚未登录 Codex。请双击 Login.command 或在官方 Codex 桌面应用登录，完成后点击“重新连接”。' : bridge.state.error }, defaultCwd });
         if (role === 'owner') result.connection = currentConnections();
+        if (['owner', 'controller'].includes(role)) result.permissions = permissions.view(role);
         if (['owner', 'controller'].includes(role)) result.desktop = { connected: Boolean(desktop?.state?.connected), error: desktop?.state?.error || null };
         send(res, 200, result); return;
       }
@@ -155,6 +159,14 @@ export async function createConsole(options = {}) {
       authorized(session);
       if (!['GET', 'POST'].includes(method)) throw new AccessError(405, '不支持的请求方式。');
       if (method === 'POST' && !equal(req.headers['x-csrf-token'], session.csrf)) throw new AccessError(403, '页面验证已过期，请刷新后重试。');
+      if (url.pathname === '/api/permissions') {
+        if (method === 'GET') { send(res, 200, permissions.view(session.role)); return; }
+        authorized(session, true);
+        send(res, 200, permissions.configure(await body(req))); return;
+      }
+      if (url.pathname === '/api/status' && method === 'GET') {
+        send(res, 200, { codex: signedIn === false ? 'error' : bridge.state.connected ? 'connected' : 'connecting', version: APP_INFO.version, permissions: permissions.view(session.role) }); return;
+      }
       if (url.pathname === '/api/updates' && method === 'GET') { send(res, 200, updater.getState()); return; }
       if (url.pathname.startsWith('/api/updates/') && method === 'POST') {
         authorized(session, true);
@@ -196,17 +208,25 @@ export async function createConsole(options = {}) {
       if (url.pathname === '/api/logout' && method === 'POST') { await body(req); if (session.role !== 'owner') sessions.change(session.id, 'revoked'); else sessions.items.delete(session.hash); res.setHeader('Set-Cookie', `${cookieName()}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`); send(res, 200, { ok: true }); return; }
       if (url.pathname === '/api/shutdown' && method === 'POST') { authorized(session, true); await body(req); send(res, 200, { ok: true }); setTimeout(() => close().then(() => options.onShutdown?.()), 100).unref(); return; }
       if (url.pathname === '/api/models' && method === 'GET') { send(res, 200, { models: await tasks.models.list({ refresh: true }) }); return; }
+      if (url.pathname === '/api/filesystem' && method === 'GET') {
+        permissions.require(session.role, 'allowOtherFiles');
+        const directories = await projects.browseDirectories(url.searchParams.get('path'));
+        permissions.require(session.role, 'allowOtherFiles');
+        send(res, 200, directories); return;
+      }
       if (url.pathname === '/api/projects') {
-        if (method === 'GET') { send(res, 200, { projects: await projects.list() }); return; }
-        authorized(session, true); const input = await body(req); send(res, 201, await projects.addRoot(input.path)); return;
+        if (method === 'GET') { send(res, 200, { projects: await projects.list(projectScope()) }); return; }
+        const input = await body(req); permissions.require(session.role, 'allowOtherFiles');
+        const project = await projects.addRoot(input.path, { source: session.role === 'owner' ? 'owner' : 'mobile' });
+        permissions.require(session.role, 'allowOtherFiles'); send(res, 201, project); return;
       }
       match = /^\/api\/projects\/([a-zA-Z0-9_-]+)\/(files|preview|download|content|resolve)$/.exec(url.pathname);
       if (match && method === 'GET') {
-        if (match[2] === 'resolve') { send(res, 200, await projects.resolveReference(match[1], url.searchParams.get('reference'))); return; }
+        if (match[2] === 'resolve') { send(res, 200, await projects.resolveReference(match[1], url.searchParams.get('reference'), projectScope())); return; }
         const relative = url.searchParams.get('path') || '';
-        if (match[2] === 'files') { send(res, 200, await projects.browse(match[1], relative)); return; }
-        if (match[2] === 'preview') { send(res, 200, await projects.preview(match[1], relative)); return; }
-        const file = await projects.resolveFile(match[1], relative);
+        if (match[2] === 'files') { send(res, 200, await projects.browse(match[1], relative, projectScope())); return; }
+        if (match[2] === 'preview') { send(res, 200, await projects.preview(match[1], relative, projectScope())); return; }
+        const file = await projects.resolveFile(match[1], relative, projectScope());
         const inline = match[2] === 'content' && /^(image\/(png|jpeg|gif|webp|avif|bmp)|application\/pdf)$/.test(file.mime);
         if (match[2] === 'content' && !inline) throw new AccessError(415, '此格式请下载后打开。');
         // Project HTML/SVG/scripts are never served as executable same-origin documents.
@@ -234,7 +254,7 @@ export async function createConsole(options = {}) {
           const input = await body(req);
           let cwd = defaultCwd;
           if (input.projectId || input.cwd) {
-            const available = await projects.list();
+            const available = await projects.list(projectScope());
             const project = available.find(p => input.projectId ? p.id === input.projectId : path.resolve(p.path).toLowerCase() === path.resolve(input.cwd).toLowerCase());
             if (!project || !project.exists) throw new AccessError(400, '请选择一个可访问的电脑项目。');
             cwd = project.path;
@@ -246,10 +266,10 @@ export async function createConsole(options = {}) {
       match = /^\/api\/threads\/([a-zA-Z0-9_-]+)(?:\/(messages|stop|fork))?$/.exec(url.pathname);
       if (match) {
         if (method === 'GET' && !match[2]) { send(res, 200, await tasks.get(match[1])); return; }
-        if (method === 'POST' && match[2]) { const input = await body(req); send(res, 200, match[2] === 'stop' ? await tasks.stop(match[1]) : match[2] === 'fork' ? await tasks.fork(match[1], input) : await tasks.send(match[1], input.prompt, { model: input.model, effort: input.effort })); return; }
+        if (method === 'POST' && match[2]) { const input = await body(req); if (match[2] === 'stop') permissions.require(session.role, 'allowMobileStop'); send(res, 200, match[2] === 'stop' ? await tasks.stop(match[1]) : match[2] === 'fork' ? await tasks.fork(match[1], input) : await tasks.send(match[1], input.prompt, { model: input.model, effort: input.effort })); return; }
       }
       match = /^\/api\/approvals\/([a-f0-9]+)$/.exec(url.pathname);
-      if (match && method === 'POST') { send(res, 200, tasks.answer(match[1], await body(req))); return; }
+      if (match && method === 'POST') { const input = await body(req); permissions.require(session.role, 'allowMobileApprovals'); send(res, 200, await tasks.answer(match[1], input)); return; }
       throw new AccessError(404, '此地址不存在。');
     } catch (error) {
       if (!res.headersSent) send(res, error.status || 500, { error: (error instanceof AccessError || authenticatedRequest) ? String(error.message || '请求失败').slice(0, 1500) : '请求失败，请在电脑管理端检查服务状态。', ...(authenticatedRequest && error.threadId ? { threadId: error.threadId } : {}) });
@@ -283,7 +303,7 @@ export async function createConsole(options = {}) {
     })();
     return closePromise;
   }
-  return { server, bridge, desktop, tasks, projects, sessions, tunnel, updater, port, ownerUrl, connections, close };
+  return { server, bridge, desktop, tasks, projects, permissions, sessions, tunnel, updater, port, ownerUrl, connections, close };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

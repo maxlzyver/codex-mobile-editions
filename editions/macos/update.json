@@ -67,9 +67,9 @@
       "sha256": "60c44533149581d3719b75815939d7c54b39ef7b3f1b58994c2cd941b26cccfc"
     },
     {
-      "bytes": 17847,
+      "bytes": 21820,
       "path": "lib/files.mjs",
-      "sha256": "9ed233359c760ca7a178fa6b49f8b066d6257fa4616d6f8dad5db8980c5c3717"
+      "sha256": "23cc84ef652efc4282b1808f0bf3fcd0ee727d41b51d4f6e195b51b30b3768c9"
     },
     {
       "bytes": 9294,
@@ -82,6 +82,11 @@
       "sha256": "479eddcf4b78fc11c1e1d297b29cba9a5a751e391c46c6a3bffb62506e2689fb"
     },
     {
+      "bytes": 2259,
+      "path": "lib/permissions.mjs",
+      "sha256": "a15e417c87eb1ab417501ae5dc900c0e31b610dead231ca8ac0bce7b166be808"
+    },
+    {
       "bytes": 3674,
       "path": "lib/security.mjs",
       "sha256": "31b378b01796e67a30602a926483c89fc50589a4809ec07f05cf848517d72626"
@@ -92,9 +97,9 @@
       "sha256": "5be903c67a5a260df793b65f387d41c362bd143bedb2f7e874e932f754e68207"
     },
     {
-      "bytes": 16835,
+      "bytes": 17693,
       "path": "lib/tasks.mjs",
-      "sha256": "264ee8e9cd53a0fa862c97e96c41f4857baa05e48fef29f1df00fef5e8f100e6"
+      "sha256": "79f90cb2101912e0216451ccfc17fa9f1cea85a171845edeaab0d2c7cdcfdb0e"
     },
     {
       "bytes": 15907,
@@ -117,9 +122,9 @@
       "sha256": "0ddda2dfe422afa6acec44cf01978d97db717ff60a5877997f1aa992b0485e4b"
     },
     {
-      "bytes": 58322,
+      "bytes": 66683,
       "path": "public/app.js",
-      "sha256": "b856fc68d7a5c6a03cc23b29771515d9d3d1246601a1023ee459091e3e2fcb08"
+      "sha256": "a2a9ab934b96ce4c6dd71ccc272148c748a1f0d380b2b118ae8a625da7760829"
     },
     {
       "bytes": 517,
@@ -127,9 +132,9 @@
       "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
     },
     {
-      "bytes": 24817,
+      "bytes": 30784,
       "path": "public/index.html",
-      "sha256": "8981d3e6de21d8ec976b9506ecb7d8c9ad1498a848a600f864b63e66ff9e16a9"
+      "sha256": "a20a2bd6e83c204192c958eda520d981b4db7d41913890a53b475086770f5dce"
     },
     {
       "bytes": 409,
@@ -137,19 +142,19 @@
       "sha256": "05707e1674d43d80729035f57285a2139266d216a17bba2f0eb5d0edd6f8cffb"
     },
     {
-      "bytes": 14670,
+      "bytes": 16219,
       "path": "public/settings.css",
-      "sha256": "e715bc0a5fafb2744528be8affc96153bac8df6084dbcc67110ac3a1c43b8c09"
+      "sha256": "1e8e594ca3ef50283f18f37a2fe82710c1ad368d17c4c336bb21be2997aa9791"
     },
     {
-      "bytes": 15450,
+      "bytes": 21977,
       "path": "public/settings.js",
-      "sha256": "1a02eabf6f7131b492fd58103ac3356a840f450485690abc5e10dd8dd4d95486"
+      "sha256": "55e9c6ef6e0e89dce8732aa58c6f8a812999352c2369e55601b27e92f2fa00b2"
     },
     {
-      "bytes": 34360,
+      "bytes": 37441,
       "path": "public/styles.css",
-      "sha256": "4e551a1e3395e45085119d2dd9bf89f7594a0efeb34ed24c561c3d7dff37d81a"
+      "sha256": "a37b6775b059344b6c39dbc8f14b8c078db76900984ba92b044d69a0df33d2c2"
     },
     {
       "bytes": 121660,
@@ -157,9 +162,9 @@
       "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
     },
     {
-      "bytes": 22254,
+      "bytes": 23900,
       "path": "server.mjs",
-      "sha256": "0e33380106e01e0234a7de8bdfd9299873c07c5919b6747b2543f9953bd6ee04"
+      "sha256": "d2e2b85837aef4a0593a09c7ce9a1b524d35cd951143f987be8e1212ece2c0a0"
     },
     {
       "bytes": 6545,
@@ -177,9 +182,9 @@
       "sha256": "9249ef9f37f8789536b008563d6ee870a217dde00ac9526cfb9d6d697f510ac9"
     },
     {
-      "bytes": 12716,
+      "bytes": 16391,
       "path": "test/files.test.mjs",
-      "sha256": "09d2f4dac2841e261b05fa367e6f0b748ae45dfb0907dc346bdeafa8ee6a5109"
+      "sha256": "0de9f55996d06b65205c5a8954cd43e3482d235af833587ae8ad267b1292c12f"
     },
     {
       "bytes": 1976,
@@ -192,9 +197,14 @@
       "sha256": "8fca75644ffb21bce0966d1a92f8aad33874e6d4952d64073d18c45c5b2b0d49"
     },
     {
-      "bytes": 32575,
+      "bytes": 3147,
+      "path": "test/permissions.test.mjs",
+      "sha256": "4bb0c11dcbdbd6d44c1e727fcc8d97789a36417709900032628e8771c811cdfa"
+    },
+    {
+      "bytes": 39949,
       "path": "test/server.test.mjs",
-      "sha256": "f1fcb0e543a3ffab5a15d184d8ac25f68de768231bbffe651fa856e7e76ffb1c"
+      "sha256": "633862b7c4e72ca26861c3ba11c8a9b0d764f16c9883b6f4d6688c07a2d2a11d"
     },
     {
       "bytes": 6172,
@@ -202,9 +212,9 @@
       "sha256": "9731769622dfb6a8c30c9ac29d558bb3b921439137a759e12e2e50d7ae986821"
     },
     {
-      "bytes": 27798,
+      "bytes": 33075,
       "path": "test/tasks.test.mjs",
-      "sha256": "16468c456eaf6df5ea433c0f512c4eb15b624826ef16af6c66b0aac209c35d94"
+      "sha256": "6ee6441a109535fbfa530c43b917bd9734f5f1b8ff385ded025f8668628648b3"
     },
     {
       "bytes": 5001,

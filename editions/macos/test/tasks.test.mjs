@@ -487,3 +487,93 @@ test('a failed or still-pending CLI submission is not labelled as accepted', asy
   assert.deepEqual((await tasks.get(id)).thread.messages.map(message => message.text), ['Accepted']);
   assert.equal(tasks.submitted.records.length, 1);
 });
+
+test('standalone views advertise real owned capabilities and keep desktop history read-only', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const owned = await tasks.create('Owned task');
+  assert.deepEqual(owned.thread.capabilities, { send: true, stop: true, approvals: true, modelSelection: true, effortSelection: true, fork: true });
+  bridge.threads.set('history', { id: 'history', cwd: directory, status: { type: 'idle' }, turns: [] });
+  const history = await tasks.get('history');
+  assert.equal(history.thread.readOnly, true);
+  assert.deepEqual(history.thread.capabilities, { send: false, stop: false, approvals: false, modelSelection: false, effortSelection: false, fork: true });
+});
+
+test('stop loads an uncached owned thread and interrupts only its active turn without resuming it', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const first = await tasks.create('First task');
+  const second = await tasks.create('Other task');
+  const restarted = new Tasks(bridge, directory, directory);
+  bridge.calls.length = 0;
+  assert.equal(restarted.cache.size, 0);
+  assert.deepEqual(await restarted.stop(first.thread.id), { ok: true, requested: true });
+  assert.deepEqual(bridge.calls, [
+    { method: 'thread/read', params: { threadId: first.thread.id, includeTurns: true } },
+    { method: 'turn/interrupt', params: { threadId: first.thread.id, turnId: first.thread.turnId } },
+  ]);
+  assert.equal(bridge.threads.get(second.thread.id).turns.at(-1).status, 'inProgress');
+});
+
+test('a pending turn start with no turn ID cannot report that a stop was requested', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('Initial task');
+  bridge.finish(thread.id);
+  const entered = deferred();
+  const gate = deferred();
+  bridge.handlers.set('turn/start', async () => { entered.resolve(); return gate.promise; });
+  const starting = tasks.send(thread.id, 'Next turn');
+  await entered.promise;
+  assert.equal(tasks.cache.get(thread.id).turnId, null);
+  await assert.rejects(tasks.stop(thread.id), error => error.status === 409 && /尚未取得可停止的轮次/.test(error.message));
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/interrupt').length, 0);
+  assert.equal(tasks.cache.get(thread.id).status, 'running');
+  gate.resolve({ turn: { id: 'pending-turn', status: 'inProgress', items: [] } });
+  await starting;
+  bridge.handlers.set('turn/interrupt', async () => ({}));
+  assert.deepEqual(await tasks.stop(thread.id), { ok: true, requested: true });
+  assert.deepEqual(bridge.calls.at(-1).params, { threadId: thread.id, turnId: 'pending-turn' });
+  assert.equal(tasks.cache.get(thread.id).status, 'running', 'RPC acceptance must not fabricate a completion notification');
+});
+
+test('stop propagates read and interrupt failures and releases its lock for retry', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const { thread } = await tasks.create('Task');
+  const restarted = new Tasks(bridge, directory, directory);
+  bridge.handlers.set('thread/read', async () => { throw new Error('Read unavailable'); });
+  await assert.rejects(restarted.stop(thread.id), /Read unavailable/);
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/interrupt').length, 0);
+  bridge.handlers.delete('thread/read');
+  bridge.handlers.set('turn/interrupt', async () => { throw new Error('Interrupt rejected'); });
+  await assert.rejects(restarted.stop(thread.id), /Interrupt rejected/);
+  assert.equal(restarted.cache.get(thread.id).status, 'running');
+  bridge.handlers.delete('turn/interrupt');
+  assert.deepEqual(await restarted.stop(thread.id), { ok: true, requested: true });
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/interrupt').length, 2);
+});
+
+test('concurrent stops send one scoped request and reject new sends until it settles', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('Task');
+  const entered = deferred();
+  const gate = deferred();
+  bridge.handlers.set('turn/interrupt', async () => { entered.resolve(); return gate.promise; });
+  const stopping = tasks.stop(thread.id);
+  await entered.promise;
+  const callCount = bridge.calls.length;
+  await assert.rejects(tasks.stop(thread.id), { status: 409 });
+  await assert.rejects(tasks.send(thread.id, 'Not during stop'), { status: 409 });
+  assert.equal(bridge.calls.length, callCount);
+  gate.resolve({});
+  assert.deepEqual(await stopping, { ok: true, requested: true });
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/interrupt').length, 1);
+  await tasks.send(thread.id, 'After request settled');
+  assert.equal(bridge.calls.at(-1).method, 'turn/steer');
+});
+
+test('an idle owned thread cannot report a successful stop without an interrupt request', async t => {
+  const { tasks, bridge } = await fixture(t);
+  const { thread } = await tasks.create('Task');
+  bridge.finish(thread.id);
+  await assert.rejects(tasks.stop(thread.id), error => error.status === 409 && /没有可停止/.test(error.message));
+  assert.equal(bridge.calls.filter(call => call.method === 'turn/interrupt').length, 0);
+  assert.equal((await tasks.get(thread.id)).thread.status, 'idle');
+});

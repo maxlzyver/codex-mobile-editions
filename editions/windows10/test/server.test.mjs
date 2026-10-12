@@ -327,6 +327,83 @@ test('owner can add a project; approved phones can list projects but cannot add 
   assert(projects.body.projects.some(p => path.resolve(p.path).toLowerCase() === path.resolve(extraRoot).toLowerCase()));
 });
 
+test('permissions are default closed, synchronized, and manageable only by the local owner with CSRF', async t => {
+  const f = await fixture(t), owner = await f.owner(), phone = await f.pair(owner);
+  assert.equal((await f.request('/api/permissions')).status, 401);
+  assert.equal((await f.request('/api/permissions', phone)).status, 401);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  const defaults = { allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false, canManage: false };
+  assert.deepEqual((await f.request('/api/permissions', phone)).body, defaults);
+  assert.deepEqual((await f.request('/api/bootstrap', phone)).body.permissions, defaults);
+  assert.deepEqual((await f.request('/api/status', phone)).body.permissions, defaults);
+  assert.equal((await f.request('/api/permissions', { ...phone, method: 'POST', data: { allowOtherFiles: true } })).status, 403);
+  assert.equal((await f.request('/api/permissions', { cookie: owner.cookie, method: 'POST', data: { allowOtherFiles: true } })).status, 403);
+  for (const data of [{ allowOtherFiles: 'true' }, { allowOtherFiles: true, canManage: true }, { unknown: true }]) assert.equal((await f.request('/api/permissions', { ...owner, method: 'POST', data })).status, 400);
+  assert.deepEqual((await f.request('/api/permissions', phone)).body, defaults);
+  assert.equal((await f.request('/api/permissions', { ...owner, method: 'POST', data: { allowOtherFiles: true } })).status, 200);
+  assert.equal((await f.request('/api/bootstrap', phone)).body.permissions.allowOtherFiles, true);
+  assert.equal((await f.request('/api/status', owner)).body.permissions.canManage, true);
+  const tunneledOwner = { ...owner, headers: { Host: new URL(f.tunnel.state.url).host, Origin: f.tunnel.state.url } };
+  assert.equal((await f.request('/api/permissions', { ...tunneledOwner, method: 'POST', data: { allowMobileStop: true } })).status, 401);
+});
+
+test('mobile stop and both approval outcomes require independent switches without weakening backend ownership', async t => {
+  const f = await fixture(t), owner = await f.owner(), phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  const calls = [];
+  f.app.tasks.stop = async id => { calls.push(['stop', id]); return { ok: true }; };
+  f.app.tasks.answer = async (id, input) => { calls.push(['approval', id, input]); return { ok: true }; };
+  const stop = '/api/threads/owned-fixture/stop', approve = '/api/approvals/abcdef';
+  for (const decision of ['accept', 'decline']) assert.equal((await f.request(approve, { ...phone, method: 'POST', data: { decision } })).status, 403);
+  assert.equal((await f.request(stop, { ...phone, method: 'POST', data: {} })).status, 403); assert.equal(calls.length, 0);
+  assert.equal((await f.request(stop, { ...owner, method: 'POST', data: {} })).status, 200);
+  assert.equal((await f.request(approve, { ...owner, method: 'POST', data: { decision: 'decline' } })).status, 200);
+  await f.request('/api/permissions', { ...owner, method: 'POST', data: { allowMobileStop: true } });
+  assert.equal((await f.request(stop, { ...phone, method: 'POST', data: {} })).status, 200);
+  assert.equal((await f.request(approve, { ...phone, method: 'POST', data: { decision: 'accept' } })).status, 403);
+  await f.request('/api/permissions', { ...owner, method: 'POST', data: { allowMobileStop: false, allowMobileApprovals: true } });
+  assert.equal((await f.request(stop, { ...phone, method: 'POST', data: {} })).status, 403);
+  for (const decision of ['accept', 'decline']) assert.equal((await f.request(approve, { ...phone, method: 'POST', data: { decision } })).status, 200);
+  const before = calls.length;
+  assert.equal((await f.request(approve, { cookie: phone.cookie, method: 'POST', data: { decision: 'accept' } })).status, 403);
+  await f.request(`/api/devices/${phone.id}/revoke`, { ...owner, method: 'POST', data: {} });
+  assert.equal((await f.request(approve, { ...phone, method: 'POST', data: { decision: 'accept' } })).status, 401); assert.equal(calls.length, before);
+});
+
+test('mobile other-files permission grants directory selection and revokes every extra-project read route', async t => {
+  const f = await fixture(t), owner = await f.owner(), phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  const extra = path.join(f.fixtureDir, 'mobile-extra'); await mkdir(extra); await writeFile(path.join(extra, 'result.txt'), 'extra result');
+  const browse = '/api/filesystem?path=' + encodeURIComponent(extra);
+  assert.equal((await f.request(browse, phone)).status, 403);
+  assert.equal((await f.request(browse, owner)).status, 200);
+  await f.request('/api/permissions', { ...owner, method: 'POST', data: { allowOtherFiles: true } });
+  assert.equal((await f.request('/api/filesystem', phone)).status, 200);
+  assert.equal((await f.request(browse, phone)).status, 200);
+  assert.equal((await f.request('/api/filesystem?path=' + encodeURIComponent(f.runtimeDir), phone)).status, 403);
+  assert.equal((await f.request('/api/projects', { ...phone, method: 'POST', data: { path: f.runtimeDir } })).status, 403);
+  const added = await f.request('/api/projects', { ...phone, method: 'POST', data: { path: extra, source: 'owner' } }); assert.equal(added.status, 201);
+  const id = added.body.id, base = `/api/projects/${id}`;
+  assert.equal((await f.request(`${base}/download?path=result.txt`, phone)).body, 'extra result');
+  await f.request('/api/permissions', { ...owner, method: 'POST', data: { allowOtherFiles: false } });
+  assert.equal((await f.request(browse, phone)).status, 403);
+  assert.ok(!(await f.request('/api/projects', phone)).body.projects.some(project => project.id === id));
+  for (const route of [`${base}/files`, `${base}/preview?path=result.txt`, `${base}/download?path=result.txt`, `${base}/content?path=result.txt`, `${base}/resolve?reference=result.txt`]) assert.equal((await f.request(route, phone)).status, 404, route);
+  assert.equal((await f.request('/api/threads', { ...phone, method: 'POST', data: { projectId: id, prompt: 'must not run' } })).status, 400);
+  assert.equal((await f.request(`${base}/download?path=result.txt`, owner)).body, 'extra result');
+  assert.equal((await f.request('/api/projects', { ...owner, method: 'POST', data: { path: extra } })).status, 201);
+  assert.equal((await f.request(`${base}/download?path=result.txt`, phone)).body, 'extra result', 'Owner grants remain ordinary authorized projects');
+});
+
+test('allowing mobile stop does not grant control of read-only desktop history', async t => {
+  const f = await fixture(t), owner = await f.owner(), phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  await f.request('/api/permissions', { ...owner, method: 'POST', data: { allowMobileStop: true, allowMobileApprovals: true } });
+  assert.equal((await f.request('/api/threads/desktop-history/stop', { ...phone, method: 'POST', data: {} })).status, 403);
+  assert.equal((await f.request('/api/approvals/abcdef', { ...phone, method: 'POST', data: { decision: 'accept' } })).status, 404);
+  assert.ok(f.bridge.calls.every(call => ['thread/list', 'thread/read'].includes(call.method)));
+});
+
 test('project files expose text preview and authenticated downloads with byte ranges', async t => {
   const f = await fixture(t);
   const auth = await f.owner();
@@ -358,6 +435,33 @@ test('project files expose text preview and authenticated downloads with byte ra
     assert.equal(invalid.status, 416);
     assert.equal(invalid.headers['content-range'], 'bytes */10');
   }
+});
+
+test('approved phones resolve chat file references and reuse protected preview/download routes', async t => {
+  const f = await fixture(t);
+  const owner = await f.owner();
+  const phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  const project = await f.defaultProject(owner);
+  const file = path.join(f.projectRoot, '手机 报告.md');
+  await writeFile(file, '# Ready from chat');
+  const reference = pathToFileURL(file).href + '#L1';
+  const route = `/api/projects/${project.id}/resolve?reference=${encodeURIComponent(reference)}`;
+  const result = await f.request(route, phone);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.path, '手机 报告.md');
+  assert.equal(result.body.projectId, project.id);
+  assert.equal(result.body.mime, 'text/markdown');
+  assert.equal(result.body.absolutePath, undefined);
+  const query = `path=${encodeURIComponent(result.body.path)}`;
+  assert.equal((await f.request(`/api/projects/${project.id}/preview?${query}`, phone)).body.text, '# Ready from chat');
+  assert.equal((await f.request(`/api/projects/${project.id}/download?${query}`, phone)).body, '# Ready from chat');
+  await writeFile(path.join(f.fixtureDir, 'outside.txt'), 'not authorized');
+  const escaped = await f.request(`/api/projects/${project.id}/resolve?reference=${encodeURIComponent(path.join(f.fixtureDir, 'outside.txt'))}`, phone);
+  assert.equal(escaped.status, 403);
+  assert.doesNotMatch(JSON.stringify(escaped.body), /not authorized/);
+  await f.request(`/api/devices/${phone.id}/revoke`, { ...owner, method: 'POST', data: {} });
+  assert.equal((await f.request(route, phone)).status, 401);
 });
 
 test('HTML and SVG cannot run inline and downloads cannot escape the project', async t => {
@@ -504,31 +608,4 @@ test('native HTTP write errors remain explicit and do not fall back to duplicate
   assert.match(response.body.error, /可能已经被接受/);
   assert.equal(desktop.calls.filter(call => call.tool === 'send_message_to_thread').length, 1);
   assert(f.bridge.calls.every(call => ['thread/list', 'thread/read'].includes(call.method)));
-});
-
-test('approved phones resolve chat file references and reuse protected preview/download routes', async t => {
-  const f = await fixture(t);
-  const owner = await f.owner();
-  const phone = await f.pair(owner);
-  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
-  const project = await f.defaultProject(owner);
-  const file = path.join(f.projectRoot, '手机 报告.md');
-  await writeFile(file, '# Ready from chat');
-  const reference = pathToFileURL(file).href + '#L1';
-  const route = `/api/projects/${project.id}/resolve?reference=${encodeURIComponent(reference)}`;
-  const result = await f.request(route, phone);
-  assert.equal(result.status, 200);
-  assert.equal(result.body.path, '手机 报告.md');
-  assert.equal(result.body.projectId, project.id);
-  assert.equal(result.body.mime, 'text/markdown');
-  assert.equal(result.body.absolutePath, undefined);
-  const query = `path=${encodeURIComponent(result.body.path)}`;
-  assert.equal((await f.request(`/api/projects/${project.id}/preview?${query}`, phone)).body.text, '# Ready from chat');
-  assert.equal((await f.request(`/api/projects/${project.id}/download?${query}`, phone)).body, '# Ready from chat');
-  await writeFile(path.join(f.fixtureDir, 'outside.txt'), 'not authorized');
-  const escaped = await f.request(`/api/projects/${project.id}/resolve?reference=${encodeURIComponent(path.join(f.fixtureDir, 'outside.txt'))}`, phone);
-  assert.equal(escaped.status, 403);
-  assert.doesNotMatch(JSON.stringify(escaped.body), /not authorized/);
-  await f.request(`/api/devices/${phone.id}/revoke`, { ...owner, method: 'POST', data: {} });
-  assert.equal((await f.request(route, phone)).status, 401);
 });

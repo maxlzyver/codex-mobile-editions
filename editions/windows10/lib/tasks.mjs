@@ -27,6 +27,7 @@ export class Tasks {
     this.cache = new Map();
     this.loaded = new Set();
     this.locks = new Set();
+    this.stopLocks = new Set();
     this.approvals = new Map();
     this.listCache = null;
     this.listTime = 0;
@@ -93,7 +94,12 @@ export class Tasks {
     this.cache.set(id, cached);
     return this.view(cached);
   }
-  view(t) { return { thread: { ...t, messages: this.submitted.merge(t.id, t.messages), readOnly: !this.owned.has(t.id), ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) }, approvals: [...this.approvals.values()].filter(a => a.threadId === t.id).map(({ rpcId, ...a }) => a) }; }
+  view(t) {
+    const owned = this.owned.has(t.id);
+    return { thread: { ...t, messages: this.submitted.merge(t.id, t.messages), readOnly: !owned,
+      capabilities: { send: owned, stop: owned, approvals: owned, modelSelection: owned, effortSelection: owned, fork: true },
+      ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) }, approvals: [...this.approvals.values()].filter(a => a.threadId === t.id).map(({ rpcId, ...a }) => a) };
+  }
   items(t, turn) {
     for (const [index, item] of (turn?.items || []).entries()) {
       const parsed = message(item, turn.id, index);
@@ -147,6 +153,7 @@ export class Tasks {
   async send(id, prompt, options = {}) {
     prompt = this.validatePrompt(prompt);
     if (!this.owned.has(id)) throw new AccessError(403, '桌面历史为只读。请新建手机任务；原有桌面任务继续在桌面端操作。');
+    if (this.stopLocks.has(id)) throw new AccessError(409, '此任务正在请求停止，请稍候刷新后再发送。');
     if (this.locks.has(id)) throw new AccessError(409, '此任务正在提交，请稍候。');
     this.locks.add(id);
     let startingTurn = false;
@@ -196,9 +203,16 @@ export class Tasks {
   }
   async stop(id) {
     if (!this.owned.has(id)) throw new AccessError(403, '只能停止本控制台发起的任务。');
-    const t = this.cache.get(id);
-    if (t?.turnId && t.status === 'running') await this.bridge.request('turn/interrupt', { threadId: id, turnId: t.turnId });
-    return { ok: true };
+    if (this.stopLocks.has(id)) throw new AccessError(409, '此任务已在请求停止，请稍候刷新。');
+    this.stopLocks.add(id);
+    try {
+      await this.get(id);
+      const t = this.cache.get(id);
+      if ((this.locks.has(id) || t?.status === 'running') && !t?.turnId) throw new AccessError(409, '此任务正在启动，尚未取得可停止的轮次，请稍候刷新后再试。');
+      if (t?.status !== 'running' || !t.turnId) throw new AccessError(409, '此任务当前没有可停止的运行轮次，请刷新状态。');
+      await this.bridge.request('turn/interrupt', { threadId: id, turnId: t.turnId });
+      return { ok: true, requested: true };
+    } finally { this.stopLocks.delete(id); }
   }
   notification({ method, params: p = {} }) {
     const t = this.cache.get(p.threadId || p.thread?.id);

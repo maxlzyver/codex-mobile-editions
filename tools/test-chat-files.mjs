@@ -120,7 +120,11 @@ try {
     edition = id; fixture = makeFixture(id);
     const baseline = requests.length;
     const context = await browser.newContext({ viewport: { width, height: 844 }, hasTouch: true, isMobile: true, reducedMotion: 'reduce', acceptDownloads: true });
-    await context.addInitScript(({ id, size }) => localStorage.setItem('codex-mobile.' + id + '.appearance.v1', JSON.stringify({ theme: 'blue', font: 'system', size })), { id, size });
+    await context.addInitScript(({ id, size }) => {
+      localStorage.setItem('codex-mobile.' + id + '.appearance.v1', JSON.stringify({ theme: 'blue', font: 'system', size }));
+      localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', '1.0.1');
+      localStorage.setItem('codex-mobile.' + id + '.permissions-guide-dismissed.v1', 'true');
+    }, { id, size });
     const page = await context.newPage();
     const browserErrors = [];
     page.on('pageerror', error => browserErrors.push(error.message));

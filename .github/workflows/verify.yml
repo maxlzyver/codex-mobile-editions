@@ -24,6 +24,8 @@ jobs:
         run: node tools/test-chat-files.mjs
       - name: Verify submitted messages and polling races
         run: node tools/test-message-send-ui.mjs
+      - name: Verify mobile permissions, directory picker and release notices
+        run: node tools/test-permissions-ui.mjs
   verify:
     name: ${{ matrix.edition }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

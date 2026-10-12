@@ -84,6 +84,7 @@
   let activeTab = 'appearance';
   let role = 'anonymous';
   let csrf = '';
+  let identityEpoch = 0;
   let updateState = null;
   let updateBusy = false;
   let updateLoading = false;
@@ -97,6 +98,7 @@
     });
     if (name === 'about') loadUpdates();
     else clearTimeout(updateTimer);
+    if (name === 'permissions') loadPermissions();
   }
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => selectTab(tab.id.slice('settings-tab-'.length)));
@@ -107,7 +109,7 @@
       tabs[next].focus(); selectTab(tabs[next].id.slice('settings-tab-'.length));
     });
   });
-  $('settings-open').addEventListener('click', () => { dialog.showModal(); if (activeTab === 'about') loadUpdates(); });
+  $('settings-open').addEventListener('click', () => { dialog.showModal(); if (activeTab === 'about') loadUpdates(); if (activeTab === 'permissions') loadPermissions(); });
   $('settings-close').addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', (event) => {
     if (event.target !== dialog) return;
@@ -132,11 +134,108 @@
     return result;
   }
   async function identity() {
+    const epoch = identityEpoch;
     const data = await request('/api/bootstrap');
-    role = data.role || 'anonymous'; csrf = data.csrfToken || '';
-    if (data.app?.version) $('about-version').textContent = `v${data.app.version}`;
+    if (epoch !== identityEpoch) return false;
+    receiveIdentity(data);
     return role === 'owner' || role === 'controller';
   }
+  const permissionFields = { allowMobileApprovals: 'approvals', allowMobileStop: 'stop', allowOtherFiles: 'files' };
+  let permissionState = { allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false, canManage: false };
+  let permissionBusy = false, permissionLoading = false;
+  let currentVersion = '', noticeShown = '', noticeTimer = null, guideDismissed = false;
+  const preferencePrefix = storageKey.replace('appearance.v1', '');
+  const noticeKey = preferencePrefix + 'notice.lastVersion';
+  const guideKey = preferencePrefix + 'permissions-guide-dismissed.v1';
+  try { guideDismissed = localStorage.getItem(guideKey) === 'true'; } catch {}
+  function renderPermissions() {
+    for (const [field, name] of Object.entries(permissionFields)) {
+      const enabled = permissionState[field] === true;
+      $('permission-' + name).checked = enabled;
+      $('permission-' + name).disabled = permissionBusy || permissionLoading || role !== 'owner' || permissionState.canManage !== true;
+      $('permission-' + name + '-state').textContent = enabled ? '已开启' : '已关闭';
+    }
+    $('permission-manager-note').textContent = role === 'owner'
+      ? '仅电脑端可以修改。按需开启后，已配对手机会同步生效；你可以随时关闭。'
+      : role === 'controller' ? '此手机只能查看权限状态。需要开启时，请到电脑端「设置 → 手机权限」操作。'
+      : '配对并经电脑确认后可查看权限；修改请在电脑端操作。';
+  }
+  function receiveIdentity(data) {
+    identityEpoch++;
+    role = data.role || 'anonymous'; csrf = data.csrfToken || '';
+    if (!permissionBusy && !permissionLoading) permissionState = data.permissions || { allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false, canManage: false };
+    const version = data.app?.version;
+    if (typeof version === 'string' && /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version)) {
+      currentVersion = version;
+      $('about-version').textContent = 'v' + version;
+    }
+    renderPermissions();
+    const authorized = ['owner', 'controller'].includes(role);
+    $('permission-guide').classList.toggle('hidden', !authorized || guideDismissed);
+    if (!authorized && $('release-notice').open) $('release-notice').close();
+    clearTimeout(noticeTimer);
+    if (authorized && currentVersion) noticeTimer = setTimeout(() => showReleaseNotice(false), 300);
+  }
+  async function loadPermissions() {
+    if (permissionBusy || permissionLoading) return;
+    permissionLoading = true; renderPermissions();
+    try {
+      if (!(await identity())) { renderPermissions(); return; }
+      const epoch = identityEpoch;
+      const next = await request('/api/permissions');
+      if (epoch !== identityEpoch) return;
+      permissionState = next;
+      renderPermissions();
+      document.dispatchEvent(new CustomEvent('codex:permissions-changed', { detail: permissionState }));
+      $('permission-feedback').textContent = '权限以这台电脑保存的设置为准。';
+    } catch (error) { $('permission-feedback').textContent = error.message; }
+    finally { permissionLoading = false; renderPermissions(); }
+  }
+  async function changePermission(field, enabled) {
+    if (permissionBusy || permissionLoading || role !== 'owner' || permissionState.canManage !== true) { renderPermissions(); return; }
+    const epoch = identityEpoch; let resync = false;
+    permissionBusy = true; renderPermissions(); $('permission-feedback').textContent = '正在保存权限…';
+    try {
+      const next = await request('/api/permissions', { [field]: enabled });
+      if (epoch !== identityEpoch) { resync = true; return; }
+      permissionState = next;
+      $('permission-feedback').textContent = '已保存，已配对手机会同步更新。';
+      document.dispatchEvent(new CustomEvent('codex:permissions-changed', { detail: permissionState }));
+    } catch (error) { $('permission-feedback').textContent = '未能保存：' + error.message; }
+    finally { permissionBusy = false; renderPermissions(); if (resync) loadPermissions(); }
+  }
+  for (const [field, name] of Object.entries(permissionFields)) $('permission-' + name).addEventListener('change', event => changePermission(field, event.target.checked));
+  function openPermissionSettings() {
+    if ($('release-notice').open) $('release-notice').close();
+    if (!dialog.open) dialog.showModal();
+    selectTab('permissions');
+  }
+  document.querySelectorAll('[data-open-permissions]').forEach(button => button.addEventListener('click', openPermissionSettings));
+  document.addEventListener('codex:open-permissions', openPermissionSettings);
+  document.addEventListener('codex:bootstrap', event => receiveIdentity(event.detail));
+  $('permission-guide-close').addEventListener('click', () => {
+    guideDismissed = true; $('permission-guide').classList.add('hidden');
+    try { localStorage.setItem(guideKey, 'true'); } catch {}
+  });
+  function showReleaseNotice(manual) {
+    if (!currentVersion || !['owner', 'controller'].includes(role)) return;
+    let previous = '';
+    try { previous = localStorage.getItem(noticeKey) || ''; } catch {}
+    if (!manual && (noticeShown === currentVersion || previous === currentVersion || document.querySelector('dialog[open]'))) return;
+    $('release-notice-version').textContent = 'Codex 移动助手 · V' + currentVersion;
+    $('release-notice-title').textContent = !previous && !manual ? '欢迎使用 · 本版更新' : 'V' + currentVersion + ' 更新公告';
+    $('release-notice-intro').textContent = !previous && !manual
+      ? '连接后即可查看聊天、发送指令和访问已授权项目。先了解这一版的新功能与默认权限，再按自己的需要开启。'
+      : '本版改进了手机聊天、文件访问和设置体验。升级不会替你开启手机权限，请在电脑端按需设置。';
+    if (!$('release-notice').open) $('release-notice').showModal();
+    noticeShown = currentVersion;
+    try { localStorage.setItem(noticeKey, currentVersion); } catch {}
+  }
+  $('release-notice-close').addEventListener('click', () => $('release-notice').close());
+  $('release-notice-done').addEventListener('click', () => $('release-notice').close());
+  $('release-notice-permissions').addEventListener('click', openPermissionSettings);
+  $('release-notice-review').addEventListener('click', () => showReleaseNotice(true));
+  renderPermissions();
   function accessMessage() {
     return role === 'owner' ? '更新安装在这台电脑上，手机端会随之使用新版本。' : role === 'controller' ? '请在电脑端控制台管理更新；此设备可以查看更新状态。' : '连接并批准设备后，可查看这台电脑的更新状态。';
   }

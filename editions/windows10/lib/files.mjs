@@ -64,6 +64,16 @@ function relativePath(input, { allowEmpty = true } = {}) {
   return segments.join('/');
 }
 
+function absoluteDirectory(input) {
+  if (typeof input !== 'string' || !path.isAbsolute(input) || input.length > 4096 || /[\u0000-\u001f]/.test(input)) throw new AccessError(400, '请填写电脑上已有目录的绝对路径。');
+  if (process.platform === 'win32') {
+    // Do not let a phone cause UNC/network authentication or use device/ADS aliases.
+    if (!/^[a-z]:[\\/]/i.test(input)) throw new AccessError(400, '请选择本机磁盘上的目录，不支持网络或设备路径。');
+    relativePath(input.slice(3));
+  } else relativePath(input.slice(1));
+  return path.resolve(input);
+}
+
 function filesystemError(error) {
   if (error instanceof AccessError) return error;
   if (['ENOENT', 'ENOTDIR'].includes(error?.code)) return new AccessError(404, '该目录或文件已不存在。');
@@ -82,24 +92,27 @@ export class Projects {
     this.defaultCwd = path.resolve(defaultCwd || process.cwd());
     this.runtimeDir = runtimeDir ? path.resolve(runtimeDir) : null;
     this.configFile = this.runtimeDir ? path.join(this.runtimeDir, 'project-roots.json') : null;
+    this.mobileConfigFile = this.runtimeDir ? path.join(this.runtimeDir, 'mobile-project-roots.json') : null;
     this.protectedPaths = [
       this.runtimeDir,
       process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) : path.join(os.homedir(), '.codex'),
       path.join(os.homedir(), '.codex'),
+      ...(process.platform === 'win32' ? [path.join(os.homedir(), 'AppData')] : [path.join(os.homedir(), 'Library')]),
       ...protectedPaths,
     ].filter(Boolean).map(value => path.resolve(value));
     this.extraRoots = [];
+    this.mobileRoots = [];
     this.loadPromise = this.load();
     this.addQueue = Promise.resolve();
   }
 
   async load() {
     if (!this.configFile) return;
-    try {
-      const stored = JSON.parse(await readFile(this.configFile, 'utf8'));
-      if (Array.isArray(stored)) this.extraRoots = stored.filter(value => typeof value === 'string' && path.isAbsolute(value));
-    } catch {
-      // A missing config is normal; no personal Codex configuration is changed.
+    for (const [file, field] of [[this.configFile, 'extraRoots'], [this.mobileConfigFile, 'mobileRoots']]) {
+      try {
+        const stored = JSON.parse(await readFile(file, 'utf8'));
+        if (Array.isArray(stored)) this[field] = stored.filter(value => typeof value === 'string' && path.isAbsolute(value));
+      } catch { /* A missing config is normal; personal Codex settings are untouched. */ }
     }
   }
 
@@ -114,13 +127,16 @@ export class Projects {
   }
 
   assertUnprotected(filename, boundaries) {
-    if (boundaries.some(root => contained(root, filename))) {
+    const parts = path.resolve(filename).split(/[\\/]/).map(part => part.toLowerCase());
+    const privateName = parts.some(part => ['.runtime', '.codex', '.ssh', '.aws', '.azure', '.gnupg', '.kube'].includes(part));
+    const credentialFile = ['.npmrc', '.netrc', '.git-credentials'].includes(parts.at(-1));
+    if (privateName || credentialFile || boundaries.some(root => contained(root, filename))) {
       throw new AccessError(403, '该路径包含账户凭证或控制台私有数据，不能从手机访问。');
     }
   }
 
   /** Returns every distinct task cwd plus the default cwd and owner-added roots. */
-  async list() {
+  async list({ includeMobileRoots = true } = {}) {
     await this.loadPromise;
     const threads = typeof this.tasks?.listAll === 'function'
       ? await this.tasks.listAll()
@@ -129,6 +145,7 @@ export class Projects {
     for (const entry of [
       { cwd: this.defaultCwd, count: 0 },
       ...this.extraRoots.map(cwd => ({ cwd, count: 0 })),
+      ...(includeMobileRoots ? this.mobileRoots : []).map(cwd => ({ cwd, count: 0 })),
       ...(Array.isArray(threads) ? threads : []).map(thread => ({ cwd: thread.cwd, count: 1 })),
     ]) {
       if (typeof entry.cwd !== 'string' || !path.isAbsolute(entry.cwd)) continue;
@@ -161,9 +178,9 @@ export class Projects {
     return [...projects.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { numeric: true }) || a.path.localeCompare(b.path));
   }
 
-  async resolveProject(id) {
+  async resolveProject(id, scope = {}) {
     if (typeof id !== 'string' || !/^[a-f\d]{24}$/.test(id)) throw new AccessError(404, '项目不存在，请刷新项目列表。');
-    const project = (await this.list()).find(entry => entry.id === id);
+    const project = (await this.list(scope)).find(entry => entry.id === id);
     if (!project) throw new AccessError(404, '项目不存在，请刷新项目列表。');
     if (!project.exists) throw new AccessError(404, '项目目录已不存在或当前无法读取。');
     try {
@@ -174,9 +191,9 @@ export class Projects {
     } catch (error) { throw filesystemError(error); }
   }
 
-  async resolve(id, input, { allowEmpty = true } = {}) {
+  async resolve(id, input, { allowEmpty = true, ...scope } = {}) {
     const relative = relativePath(input, { allowEmpty });
-    const project = await this.resolveProject(id);
+    const project = await this.resolveProject(id, scope);
     const boundaries = await this.boundaries();
     const requested = path.resolve(project.path, relative);
     if (!contained(project.path, requested)) throw new AccessError(403, '不能读取项目目录之外的文件。');
@@ -190,8 +207,8 @@ export class Projects {
     } catch (error) { throw filesystemError(error); }
   }
 
-  async browse(id, input = '') {
-    const resolved = await this.resolve(id, input);
+  async browse(id, input = '', scope = {}) {
+    const resolved = await this.resolve(id, input, scope);
     if (!resolved.info.isDirectory()) throw new AccessError(400, '请选择一个目录。');
     let names;
     try { names = await readdir(resolved.absolutePath); } catch (error) { throw filesystemError(error); }
@@ -232,8 +249,8 @@ export class Projects {
   }
 
   /** Only a regular file under this known project can become a download. */
-  async resolveFile(id, input) {
-    const resolved = await this.resolve(id, input, { allowEmpty: false });
+  async resolveFile(id, input, scope = {}) {
+    const resolved = await this.resolve(id, input, { ...scope, allowEmpty: false });
     if (!resolved.info.isFile()) throw new AccessError(400, '仅支持预览或下载普通文件。');
     return {
       absolutePath: resolved.absolutePath,
@@ -245,7 +262,7 @@ export class Projects {
   }
 
   /** Resolve a chat reference without granting access outside its selected project. */
-  async resolveReference(id, reference) {
+  async resolveReference(id, reference, scope = {}) {
     if (typeof reference !== 'string' || !reference.trim() || reference.length > 4096 || /[\u0000-\u001f]/.test(reference)) throw new AccessError(400, '文件引用无效。');
     let filename = reference.trim().replace(/#L\d+(?:C\d+)?(?:-L?\d+(?:C\d+)?)?$/i, '');
     try {
@@ -264,7 +281,7 @@ export class Projects {
       }
     } catch { throw new AccessError(400, '仅支持当前项目内的本机文件引用。'); }
     filename = filename.replace(/:\d+(?::\d+)?$/, '');
-    const project = await this.resolveProject(id);
+    const project = await this.resolveProject(id, scope);
     let relative = filename;
     if (path.isAbsolute(filename)) {
       const absolute = path.resolve(filename);
@@ -274,13 +291,13 @@ export class Projects {
       throw new AccessError(400, '文件引用与当前电脑的平台不匹配。');
     }
     relative = relativePath(relative, { allowEmpty: false });
-    const file = await this.resolveFile(id, relative);
+    const file = await this.resolveFile(id, relative, scope);
     return { projectId: id, path: relative, name: file.name, mime: file.mime, size: file.size };
   }
 
   /** UTF-8 text only; binary downloads remain available through resolveFile(). */
-  async preview(id, input) {
-    const filename = await this.resolveFile(id, input);
+  async preview(id, input, scope = {}) {
+    const filename = await this.resolveFile(id, input, scope);
     if (filename.size > PREVIEW_BYTES) throw new AccessError(413, '文件超过 1 MiB，无法直接预览，请下载后查看。');
     if (filename.mime !== 'application/octet-stream' && !isTextMime(filename.mime)) {
       throw new AccessError(415, '该文件不是 UTF-8 文本，请使用对应预览方式或下载后查看。');
@@ -291,7 +308,7 @@ export class Projects {
       const current = await handle.stat();
       if (!current.isFile()) throw new AccessError(400, '仅支持预览普通文件。');
       if (current.size > PREVIEW_BYTES) throw new AccessError(413, '文件超过 1 MiB，无法直接预览，请下载后查看。');
-      const confirmed = await this.resolveFile(id, input);
+      const confirmed = await this.resolveFile(id, input, scope);
       if (canonicalKey(confirmed.absolutePath) !== canonicalKey(filename.absolutePath)) throw new AccessError(409, '文件路径已变化，请重新打开。');
       const buffer = Buffer.alloc(PREVIEW_BYTES + 1);
       let length = 0;
@@ -316,9 +333,10 @@ export class Projects {
     finally { await handle?.close(); }
   }
 
-  /** Host API must restrict this method to the local owner. */
-  async addRoot(input) {
-    if (typeof input !== 'string' || !path.isAbsolute(input) || input.includes('\0')) throw new AccessError(400, '请填写电脑上已有目录的绝对路径。');
+  /** The host must authorize owner access or the mobile other-files permission. */
+  async addRoot(input, { source = 'owner' } = {}) {
+    input = absoluteDirectory(input);
+    if (!['owner', 'mobile'].includes(source)) throw new AccessError(400, '未知项目授权来源。');
     if (!this.configFile) throw new AccessError(500, '控制台尚未配置项目目录存储。');
     const operation = this.addQueue.then(async () => {
       await this.loadPromise;
@@ -329,18 +347,57 @@ export class Projects {
         this.assertUnprotected(root, await this.boundaries());
         if (!(await stat(root)).isDirectory()) throw new AccessError(400, '请选择已有的文件夹。');
       } catch (error) { throw filesystemError(error); }
-      if (!this.extraRoots.some(existing => canonicalKey(existing) === canonicalKey(root))) {
-        const updated = [...this.extraRoots, root];
-        const temporary = `${this.configFile}.${randomBytes(5).toString('hex')}.tmp`;
+      const field = source === 'mobile' ? 'mobileRoots' : 'extraRoots';
+      const file = source === 'mobile' ? this.mobileConfigFile : this.configFile;
+      if (!this[field].some(existing => canonicalKey(existing) === canonicalKey(root))) {
+        const updated = [...this[field], root];
+        const temporary = `${file}.${randomBytes(5).toString('hex')}.tmp`;
         await mkdir(this.runtimeDir, { recursive: true });
         await writeFile(temporary, `${JSON.stringify(updated, null, 2)}\n`, { mode: 0o600 });
-        await rename(temporary, this.configFile);
-        this.extraRoots = updated;
+        await rename(temporary, file);
+        this[field] = updated;
       }
       return { id: stableId(root), name: path.basename(root) || root, path: root, exists: true, threadCount: 0 };
     });
     this.addQueue = operation.catch(() => {});
     return operation;
+  }
+
+  /** Directory picker only: file reads still require a separately admitted project. */
+  async browseDirectories(input = null) {
+    const boundaries = await this.boundaries();
+    const candidates = [{ name: '主目录', path: os.homedir() }, ...(process.platform === 'win32'
+      ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(drive => ({ name: `${drive}:`, path: `${drive}:\\` }))
+      : [{ name: '系统根目录', path: '/' }, { name: '外置磁盘', path: '/Volumes' }])];
+    const locations = (await Promise.all(candidates.map(async location => {
+      try { const root = await realpath(location.path); this.assertUnprotected(root, boundaries); return (await stat(root)).isDirectory() ? { ...location, path: root } : null; } catch { return null; }
+    }))).filter(Boolean);
+    if (input === null || input === '') return { path: null, parent: null, locations, entries: [] };
+    const requested = absoluteDirectory(input);
+    this.assertUnprotected(requested, boundaries);
+    let root, names;
+    try {
+      root = await realpath(requested); this.assertUnprotected(root, boundaries);
+      if (!(await stat(root)).isDirectory()) throw new AccessError(400, '请选择已有的文件夹。');
+      names = await readdir(root);
+    } catch (error) { throw filesystemError(error); }
+    const entries = [];
+    for (let offset = 0; offset < names.length; offset += 32) {
+      const batch = await Promise.all(names.slice(offset, offset + 32).map(async name => {
+        try {
+          relativePath(name, { allowEmpty: false }); const target = path.join(root, name); this.assertUnprotected(target, boundaries);
+          const canonical = await realpath(target); this.assertUnprotected(canonical, boundaries);
+          if (!(await stat(canonical)).isDirectory()) return null;
+          return { name, path: canonical, type: 'directory' };
+        } catch { return null; }
+      }));
+      entries.push(...batch.filter(Boolean));
+    }
+    const parentPath = path.dirname(root);
+    let parent = parentPath === root ? null : parentPath;
+    try { if (parent) this.assertUnprotected(parent, boundaries); } catch { parent = null; }
+    entries.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { numeric: true }));
+    return { path: root, parent, locations, entries };
   }
 }
 

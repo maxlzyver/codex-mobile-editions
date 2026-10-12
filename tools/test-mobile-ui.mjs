@@ -122,7 +122,11 @@ try {
     currentEdition = edition;
     fixtures = { 'thread-a': makeThread('thread-a', 'A'), 'thread-b': makeThread('thread-b', 'B') };
     const context = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
-    await context.addInitScript(id => localStorage.setItem(`codex-mobile.${id}.appearance.v1`, JSON.stringify({ theme: 'blue', font: 'system', size: 22 })), edition);
+    await context.addInitScript(id => {
+      localStorage.setItem(`codex-mobile.${id}.appearance.v1`, JSON.stringify({ theme: 'blue', font: 'system', size: 22 }));
+      localStorage.setItem(`codex-mobile.${id}.notice.lastVersion`, '1.0.0');
+      localStorage.setItem(`codex-mobile.${id}.permissions-guide-dismissed.v1`, 'true');
+    }, edition);
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));

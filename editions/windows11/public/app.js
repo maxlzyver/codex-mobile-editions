@@ -37,7 +37,7 @@
     readBusy: false, statusBusy: false, devicesBusy: false, lastMessages: '', lastApprovals: '', messageDisclosure: new Map(),
     lastThreads: '', lastDevices: '', lastStatus: '', connected: true, toastTimer: null, authTimer: null,
     wantInternetPair: false, shownReady: false, activeReadOnly: false, lanUrl: '', lastThreadError: '',
-    models: [], projects: [], projectId: '', filesProjectId: '', filePath: '', filesGeneration: 0, selectionThread: null, view: 'chat', modelsBusy: false,
+    models: [], projects: [], projectId: '', filesProjectId: '', filePath: '', filesGeneration: 0, projectsGeneration: 0, accessRevision: 0, selectionThread: null, view: 'chat', modelsBusy: false,
   };
   const hidden = (id, value) => $(id).classList.toggle('hidden', value);
   const node = (tag, className, text) => {
@@ -94,6 +94,36 @@
     const status = typeof thread?.status === 'object' ? thread.status.type : thread?.status;
     return ({ completed: '已完成', idle: '就绪', error: '需要处理', failed: '需要处理', interrupted: '已停止', stopped: '已停止', waiting: '等待确认', waiting_for_approval: '等待确认' })[status] || '';
   }
+  function mobilePermission(field) {
+    return state.role === 'owner' || state.role === 'controller' && state.bootstrap?.permissions?.[field] === true;
+  }
+  function taskPermission(capability, field) {
+    return mobilePermission(field) && state.thread?.capabilities?.[capability] === true;
+  }
+  function fileAccessKey(role, permissions) {
+    return role + ':' + (role === 'controller' && permissions?.allowOtherFiles === true);
+  }
+  function invalidateFileAccess() {
+    state.accessRevision++; state.projectsGeneration++; state.filesGeneration++; previewGeneration++; directoryGeneration++;
+    state.projects = []; state.filesProjectId = ''; state.filePath = ''; directoryLocation = null;
+    for (const id of ['preview-dialog', 'directory-dialog']) if ($(id).open) $(id).close();
+    for (const id of ['preview-content', 'file-list', 'file-breadcrumbs', 'project-select', 'files-project']) $(id).replaceChildren();
+    $('preview-download').removeAttribute('href'); $('preview-title').textContent = '';
+    $('files-project-path').textContent = ''; $('file-count').textContent = ''; $('files-error').textContent = '';
+  }
+  async function reloadFileAccess() {
+    await loadProjects();
+    if (state.view === 'files') await browseFiles('');
+  }
+  function refreshPermissionControls() {
+    hidden('stop-turn', !isRunning(state.thread) || state.activeReadOnly || !taskPermission('stop', 'allowMobileStop'));
+    const otherFiles = mobilePermission('allowOtherFiles');
+    hidden('add-project-form', !otherFiles); hidden('other-files-open', !otherFiles);
+    $('other-files-note').textContent = otherFiles
+      ? '可选择电脑上的其他已有目录并添加为项目。此权限不改变 Codex 的执行权限或沙箱。'
+      : '其他电脑目录访问已关闭。已授权任务项目仍可查看；如需其他目录，请在电脑端「设置 → 手机权限」开启。';
+    if (!otherFiles && $('directory-dialog').open) $('directory-dialog').close();
+  }
   function updateStatus() {
     const info = state.bootstrap || {};
     const status = info.status || {};
@@ -104,7 +134,12 @@
     $('computer-name').textContent = status.hostname || '我的电脑';
     $('codex-state').textContent = info.desktop?.connected ? '已接入桌面 Codex' : status.codex === 'connected' ? (status.mode === 'shared' ? '已接入共享 Codex' : 'Codex 本地任务已就绪') : status.error || '正在连接 Codex';
     const standalone = status.mode === 'standalone';
-    $('composer-hint').textContent = state.thread?.native ? '已连接桌面原会话 · 发出的指令在同一聊天执行；审批与强制停止请在电脑端操作。' : standalone ? '指令使用电脑的 Codex 执行，项目文件即时共享。桌面原会话的控制能力见会话提示。' : '任务在这台电脑上执行 · 需要确认的操作会在对话中提示';
+    $('composer-hint').textContent = state.thread?.native
+      ? '桌面原会话 · 当前原生接口不支持手机审批和停止，请到 Codex 桌面处理。'
+      : isRunning(state.thread) && !mobilePermission('allowMobileStop')
+        ? '手机停止任务已关闭。需要时请在电脑端「设置 → 手机权限」开启；不会停止其他聊天。'
+        : standalone ? '任务由电脑 Codex 执行 · 手机审批与停止须同时具备权限和聊天支持。' : '任务在电脑上执行 · 操作能力以当前聊天和手机权限为准。';
+    refreshPermissionControls();
     if (status.error && state.role === 'owner' && state.lastStatus !== status.error) {
       showError(new Error(status.error));
       state.lastStatus = status.error;
@@ -124,10 +159,14 @@
     state.statusBusy = true;
     try {
       const previousRole = state.role;
+      const previousAccess = fileAccessKey(state.role, state.bootstrap?.permissions);
       const data = await api('/api/bootstrap');
       state.bootstrap = data;
       state.role = data.role || 'anonymous';
       state.csrf = data.csrfToken || '';
+      const accessChanged = previousAccess !== fileAccessKey(state.role, data.permissions);
+      if (accessChanged) invalidateFileAccess();
+      document.dispatchEvent(new CustomEvent('codex:bootstrap', { detail: data }));
       state.connected = true;
       $('app').dataset.role = state.role;
       updateStatus();
@@ -139,7 +178,7 @@
           await loadThreads();
           await Promise.allSettled([loadProjects(), loadModels()]);
           if (previousRole === 'pending') toast('电脑已确认，现在可以开始工作了');
-        }
+        } else if (accessChanged) await reloadFileAccess();
       } else if (state.role === 'pending') {
         showAuth('请在电脑上确认连接', '你的设备正在等待确认。请在电脑的「连接手机」窗口中批准本次连接。', true, '确认后会自动进入你的工作空间。');
       } else if (state.pairToken) {
@@ -271,7 +310,7 @@
       $('thread-title').textContent = thread.title || thread.name || thread.preview || '任务对话';
       $('thread-state').textContent = state.activeReadOnly ? '历史记录' : `${thread.native ? '桌面原会话 · ' : ''}${statusLabel(thread)}`;
       hidden('thread-state', !state.activeReadOnly && !statusLabel(thread));
-      hidden('stop-turn', !running || state.activeReadOnly || thread.capabilities?.stop === false);
+      hidden('stop-turn', !running || state.activeReadOnly || !taskPermission('stop', 'allowMobileStop'));
       updateStatus();
       $('prompt').disabled = state.activeReadOnly;
       $('prompt').placeholder = state.activeReadOnly ? '点上方「在此继续分支」，保留上下文继续工作。' : running ? 'Codex 正在工作，你可以输入下一条指令…' : '描述你想做的事…';
@@ -279,7 +318,7 @@
       hidden('welcome', true);
       renderConversation(thread.messages || data.messages || [], running, forceScroll);
       const approvals = data.approvals || thread.approvals || [];
-      const approvalKey = JSON.stringify(approvals);
+      const approvalKey = JSON.stringify([approvals, mobilePermission('allowMobileApprovals'), mobilePermission('allowMobileStop'), thread.capabilities?.approvals]);
       if (approvalKey !== state.lastApprovals) {
         state.lastApprovals = approvalKey;
         renderApprovals(approvals);
@@ -429,8 +468,8 @@
   let messageFileRequest = 0;
   async function openMessageFile(reference, context, button) {
     const request = ++messageFileRequest;
-    const generation = state.conversationGeneration;
-    const current = () => request === messageFileRequest && generation === state.conversationGeneration && state.activeId === context.threadId && ['owner', 'controller'].includes(state.role);
+    const generation = state.conversationGeneration, accessRevision = state.accessRevision;
+    const current = () => accessRevision === state.accessRevision && request === messageFileRequest && generation === state.conversationGeneration && state.activeId === context.threadId && ['owner', 'controller'].includes(state.role);
     button.disabled = true;
     try {
       const scope = messageFileScope(context.cwd);
@@ -505,6 +544,15 @@
       const detail = approval.description || [params.command, params.reason, params.message, params.permissions ? `请求的权限：\n${JSON.stringify(params.permissions, null, 2)}` : '', params.changes ? JSON.stringify(params.changes, null, 2) : ''].filter(Boolean).join('\n\n') || type;
       if (detail) card.append(node('pre', '', typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2)));
       const inputs = [];
+      if (!taskPermission('approvals', 'allowMobileApprovals') || approval.supported === false) {
+        const unsupported = state.thread?.capabilities?.approvals !== true || approval.supported === false;
+        card.append(node('p', 'approval-permission-note', unsupported ? '当前聊天不支持在手机处理此请求，请到电脑 Codex 完成。' : '手机审批已关闭。请在电脑端处理，或在电脑端「设置 → 手机权限」开启。'));
+        if (!unsupported) {
+          const settings = node('button', 'button', '查看手机权限'); settings.type = 'button';
+          settings.addEventListener('click', () => document.dispatchEvent(new CustomEvent('codex:open-permissions'))); card.append(settings);
+        }
+        $('approvals').append(card); continue;
+      }
       if (isQuestion) {
         const questions = approval.questions || params.questions || [];
         for (const question of questions) {
@@ -529,6 +577,7 @@
       });
       const decline = node('button', 'button', isQuestion ? '停止任务' : '拒绝');
       decline.type = 'button';
+      if (isQuestion && !taskPermission('stop', 'allowMobileStop')) { decline.disabled = true; decline.title = '手机停止任务未开启或当前聊天不支持，请在电脑处理。'; }
       decline.addEventListener('click', () => isQuestion ? stopTurn() : decideApproval(approval.id, 'decline', undefined, decline));
       actions.append(accept, decline);
       card.append(actions);
@@ -536,6 +585,7 @@
     }
   }
   async function decideApproval(id, decision, answers, button) {
+    if (!taskPermission('approvals', 'allowMobileApprovals')) { toast('手机审批未开启或当前聊天不支持，请在电脑端处理。'); return; }
     button.disabled = true;
     try {
       await api(`/api/approvals/${encodeURIComponent(id)}`, { method: 'POST', body: { decision, ...(answers ? { answers } : {}) } });
@@ -600,6 +650,7 @@
   }
   async function stopTurn() {
     if (!state.activeId) return;
+    if (!taskPermission('stop', 'allowMobileStop')) { toast('手机停止未开启或当前聊天不支持，请到电脑端处理。'); return; }
     $('stop-turn').disabled = true;
     try { await api(`/api/threads/${encodeURIComponent(state.activeId)}/stop`, { method: 'POST', body: {} }); toast('已发送停止请求'); await loadThread(); }
     catch (error) { showError(error); }
@@ -638,8 +689,11 @@
     $('thread-cwd').title = $('thread-cwd').textContent;
   }
   async function loadProjects() {
+    const generation = ++state.projectsGeneration;
     try {
-      const data = await api('/api/projects'); state.projects = data.projects || [];
+      const data = await api('/api/projects');
+      if (generation !== state.projectsGeneration || !['owner', 'controller'].includes(state.role)) return;
+      state.projects = data.projects || [];
       const defaultProject = state.projects.find(p => normalizePath(p.path) === normalizePath(state.bootstrap?.defaultCwd));
       const current = state.thread && state.projects.find(p => normalizePath(p.path) === normalizePath(state.thread.cwd));
       if (current) state.projectId = current.id;
@@ -654,7 +708,7 @@
       if (!state.projects.some(p => p.id === state.filesProjectId)) state.filesProjectId = state.projectId;
       $('files-project').value = state.filesProjectId;
       if (!state.activeId) updateProjectContext();
-    } catch (error) { $('files-error').textContent = error.message; }
+    } catch (error) { if (generation === state.projectsGeneration) $('files-error').textContent = error.message; }
   }
   function showView(view) {
     state.view = view; hidden('chat-panel', view !== 'chat'); hidden('files-panel', view !== 'files'); closeSidebar();
@@ -703,6 +757,7 @@
   }
   let previewGeneration = 0;
   async function previewFile(entry, projectId = state.filesProjectId) {
+    if (!['owner', 'controller'].includes(state.role) || !state.projects.some(project => project.id === projectId)) return;
     const generation = ++previewGeneration;
     const downloadUrl = fileUrl('download', entry.path, projectId), contentUrl = fileUrl('content', entry.path, projectId), textUrl = fileUrl('preview', entry.path, projectId);
     $('preview-title').textContent = entry.name; $('preview-download').href = downloadUrl; $('preview-download').download = entry.name;
@@ -735,6 +790,70 @@
     finally { $('fork-thread').disabled = false; }
   }
 
+  let directoryGeneration = 0, directoryLocation = null, directoryParent = null;
+  async function browseComputerDirectory(input = '') {
+    if (!mobilePermission('allowOtherFiles')) { toast('请先在电脑端开启“访问其他电脑目录”。'); return; }
+    const generation = ++directoryGeneration;
+    $('directory-error').textContent = '';
+    $('directory-list').replaceChildren(node('p', 'list-empty', '正在读取电脑目录…'));
+    $('directory-add').disabled = true;
+    try {
+      const data = await api('/api/filesystem' + (input ? '?path=' + encodeURIComponent(input) : ''));
+      if (generation !== directoryGeneration || !mobilePermission('allowOtherFiles')) return;
+      directoryLocation = data.path || null; directoryParent = data.parent || null;
+      $('directory-path').value = directoryLocation || '';
+      $('directory-current').textContent = directoryLocation || '请选择电脑位置';
+      $('directory-up').disabled = !directoryParent;
+      $('directory-add').disabled = !directoryLocation;
+      $('directory-list').replaceChildren();
+      const entries = directoryLocation ? data.entries || [] : data.locations || [];
+      for (const entry of entries) {
+        const button = node('button', 'directory-entry');
+        button.type = 'button';
+        button.append(icon('folder'), node('span', '', entry.name || entry.path));
+        button.title = entry.path;
+        button.addEventListener('click', () => browseComputerDirectory(entry.path));
+        $('directory-list').append(button);
+      }
+      if (!entries.length) $('directory-list').append(node('p', 'list-empty', '此位置没有可访问的子目录。可以添加当前目录。'));
+    } catch (error) {
+      if (generation === directoryGeneration) { directoryLocation = null; $('directory-list').replaceChildren(); $('directory-error').textContent = error.message; }
+    }
+  }
+  async function addProjectPath(input) {
+    if (!mobilePermission('allowOtherFiles')) throw new Error('其他目录访问已关闭，请在电脑端设置中开启。');
+    const added = await api('/api/projects', { method: 'POST', body: { path: input } });
+    await loadProjects();
+    const id = added.id || added.project?.id;
+    if (id && state.projects.some(project => project.id === id)) {
+      state.filesProjectId = id; $('files-project').value = id; await browseFiles('');
+    }
+    toast('目录已添加为项目，可以查看文件或在此下达指令。');
+  }
+  $('other-files-open').addEventListener('click', () => {
+    if (!mobilePermission('allowOtherFiles')) return;
+    $('directory-dialog').showModal(); browseComputerDirectory('');
+  });
+  $('directory-close').addEventListener('click', () => $('directory-dialog').close());
+  $('directory-dialog').addEventListener('close', () => { directoryGeneration++; directoryLocation = null; });
+  $('directory-form').addEventListener('submit', event => { event.preventDefault(); browseComputerDirectory($('directory-path').value.trim()); });
+  $('directory-locations').addEventListener('click', () => browseComputerDirectory(''));
+  $('directory-up').addEventListener('click', () => { if (directoryParent) browseComputerDirectory(directoryParent); });
+  $('directory-add').addEventListener('click', async () => {
+    if (!directoryLocation) return;
+    $('directory-add').disabled = true;
+    try { await addProjectPath(directoryLocation); $('directory-dialog').close(); }
+    catch (error) { $('directory-error').textContent = error.message; $('directory-add').disabled = false; }
+  });
+  document.addEventListener('codex:permissions-changed', event => {
+    const accessChanged = fileAccessKey(state.role, state.bootstrap?.permissions) !== fileAccessKey(state.role, event.detail);
+    if (accessChanged) invalidateFileAccess();
+    state.bootstrap = { ...state.bootstrap, permissions: event.detail };
+    updateStatus(); state.lastApprovals = '';
+    if (state.activeId) loadThread();
+    if (accessChanged) reloadFileAccess();
+    else if (state.view === 'files') loadProjects();
+  });
   async function openPairDialog() {
     if (state.role !== 'owner') return;
     if (!$('pair-dialog').open) $('pair-dialog').showModal();
@@ -935,7 +1054,7 @@
   $('preview-dialog').addEventListener('close', () => { previewGeneration++; $('preview-content').replaceChildren(); });
   $('add-project-form').addEventListener('submit', async event => {
     event.preventDefault();
-    try { await api('/api/projects', { method: 'POST', body: { path: $('add-project-path').value.trim() } }); $('add-project-path').value = ''; await loadProjects(); toast('项目目录已添加，手机端刷新即可看到。'); }
+    try { await addProjectPath($('add-project-path').value.trim()); $('add-project-path').value = ''; }
     catch (error) { $('files-error').textContent = error.message; }
   });
   $('mobile-new').addEventListener('click', resetConversation);

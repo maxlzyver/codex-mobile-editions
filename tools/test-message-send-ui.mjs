@@ -57,6 +57,10 @@ try {
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await context.addInitScript(id => {
+      localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', '1.0.1');
+      localStorage.setItem('codex-mobile.' + id + '.permissions-guide-dismissed.v1', 'true');
+    }, edition);
     const page = await context.newPage(); const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     const eventually = async (condition, label) => {

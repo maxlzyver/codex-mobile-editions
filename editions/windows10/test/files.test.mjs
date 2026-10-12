@@ -10,6 +10,54 @@ const hasStatus = expected => error => {
   return true;
 };
 
+test('mobile-added project roots are separate, persist, and disappear from the restricted scope', async t => {
+  const { projects, options, outside, projectA } = await fixture(t);
+  const added = await projects.addRoot(outside, { source: 'mobile' });
+  assert.ok((await projects.list()).some(project => project.id === added.id));
+  assert.ok(!(await projects.list({ includeMobileRoots: false })).some(project => project.id === added.id));
+  await assert.rejects(projects.browse(added.id, '', { includeMobileRoots: false }), hasStatus(404));
+  await assert.rejects(projects.preview(added.id, 'outside.txt', { includeMobileRoots: false }), hasStatus(404));
+  const reopened = new Projects(options);
+  assert.ok((await reopened.list()).some(project => project.id === added.id));
+  assert.ok(!(await reopened.list({ includeMobileRoots: false })).some(project => project.id === added.id));
+  assert.ok((await reopened.list({ includeMobileRoots: false })).some(project => project.path === projectA));
+  await reopened.addRoot(outside);
+  assert.ok((await reopened.list({ includeMobileRoots: false })).some(project => project.id === added.id), 'An explicit owner grant remains available');
+});
+
+test('disabling broad mobile roots retains only concrete task working directories', async t => {
+  const { projects, outside, options } = await fixture(t);
+  const selected = await projects.addRoot(outside, { source: 'mobile' });
+  const child = path.join(outside, 'real-project'); await mkdir(child); await writeFile(path.join(child, 'result.txt'), 'task result');
+  projects.tasks = { list: async () => [{ id: 'created-task', cwd: child }] };
+  const scope = { includeMobileRoots: false }, visible = await projects.list(scope);
+  assert.ok(!visible.some(project => project.id === selected.id));
+  const actual = visible.find(project => project.path === child); assert.ok(actual);
+  assert.equal((await projects.preview(actual.id, 'result.txt', scope)).text, 'task result');
+  await assert.rejects(projects.resolveFile(actual.id, '../outside.txt', scope), hasStatus(400));
+});
+
+test('other-directory picker never opens credentials, private state, network aliases, or files', async t => {
+  const { projects, projectA, outside, runtimeDir, privateAccount } = await fixture(t);
+  const credentials = path.join(outside, '.codex'), ssh = path.join(outside, '.ssh');
+  await mkdir(credentials); await mkdir(ssh); await writeFile(path.join(credentials, 'auth.json'), 'must stay private');
+  const accountLink = path.join(outside, 'account-link');
+  await symlink(privateAccount, accountLink, process.platform === 'win32' ? 'junction' : 'dir');
+  const listing = await projects.browseDirectories(outside);
+  assert.equal(listing.path, await realpath(outside));
+  assert.ok(!listing.entries.some(entry => ['.codex', '.ssh', 'outside.txt', 'account-link'].includes(entry.name)));
+  for (const target of [credentials, ssh, runtimeDir, privateAccount, accountLink]) {
+    await assert.rejects(projects.browseDirectories(target), hasStatus(403));
+    await assert.rejects(projects.addRoot(target, { source: 'mobile' }), hasStatus(403));
+  }
+  for (const invalid of ['relative', 'C:\\folder:stream', '\\\\host\\share', '\\\\?\\C:\\Windows', path.join(projectA, '..', '..') + '/../escape']) {
+    await assert.rejects(projects.browseDirectories(invalid), error => [400, 404].includes(error.status));
+  }
+  await assert.rejects(projects.browseDirectories(path.join(outside, 'outside.txt')), hasStatus(400));
+  const shortcuts = await projects.browseDirectories();
+  assert.equal(shortcuts.path, null); assert.deepEqual(shortcuts.entries, []); assert.ok(Array.isArray(shortcuts.locations));
+});
+
 async function fixture(t) {
   const work = fileURLToPath(new URL('../../../../../work/', import.meta.url));
   await mkdir(work, { recursive: true });
