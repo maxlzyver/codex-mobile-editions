@@ -130,11 +130,26 @@ async function toggle(locator) {
   if (!wasOpen) await locator.locator(':scope > .process-content > .message, :scope > .process-content > .turn-activity, :scope > .message-content').first().waitFor({ state: 'attached' });
 }
 async function assertHiddenGroup(locator) {
-  await assertOpen(locator, false);
-  assert.ok(await locator.locator(':scope > summary').isVisible());
-  for (const child of await locator.locator('.process-content .message, .process-content .message-avatar, .process-content .message-content, .process-content .message-name, .process-content summary, .process-content .message-file-link').all()) {
-    assert.equal(await child.isVisible(), false, `Collapsed process row leaked: ${(await child.textContent()).slice(0, 90)}`);
-  }
+  await locator.waitFor({ state: 'attached' });
+  // A toggle event can remove lazy children between two Playwright awaits.
+  // Sample both visibility and diagnostic text atomically in the browser.
+  const groups = await locator.evaluateAll(elements => {
+    const visible = element => {
+      if (!element) return false;
+      const style = getComputedStyle(element), bounds = element.getBoundingClientRect();
+      return style.visibility !== 'hidden' && style.visibility !== 'collapse' && bounds.width > 0 && bounds.height > 0;
+    };
+    return elements.map(element => ({
+      open: element.open,
+      summaryVisible: visible(element.querySelector(':scope > summary')),
+      leaked: [...element.querySelectorAll('.process-content .message, .process-content .message-avatar, .process-content .message-content, .process-content .message-name, .process-content summary, .process-content .message-file-link')]
+        .filter(visible).map(child => (child.textContent || '').slice(0, 90)),
+    }));
+  });
+  assert.equal(groups.length, 1, 'Exactly one disclosure must exist for this group');
+  assert.equal(groups[0].open, false, 'Disclosure should be closed');
+  assert.equal(groups[0].summaryVisible, true, 'Collapsed process summary must remain visible');
+  assert.deepEqual(groups[0].leaked, [], 'Collapsed process rows must all be hidden');
 }
 async function assertVisibleOutsideProcess(page, thread) {
   for (const item of thread.messages.filter(item => item.role === 'user' || (item.role === 'assistant' && item.phase !== 'commentary'))) {
