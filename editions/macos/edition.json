@@ -2,8 +2,8 @@
   "label": "macOS 专用版",
   "updatePath": "editions/macos",
   "platform": "macOS universal",
-  "assetName": "codex-mobile-macos-1.0.1-universal.zip",
+  "assetName": "codex-mobile-macos-1.1.0-universal.zip",
   "repository": "maxlzyver/codex-mobile-editions",
   "id": "macos",
-  "version": "1.0.1"
+  "version": "1.1.0"
 }

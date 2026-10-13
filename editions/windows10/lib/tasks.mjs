@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { AccessError } from './security.mjs';
 import { Models } from './models.mjs';
 import { SubmittedMessages } from './submitted-messages.mjs';
@@ -8,6 +8,43 @@ import { SubmittedMessages } from './submitted-messages.mjs';
 const clip = value => String(value || '').slice(-40000);
 const active = status => status?.type === 'active' || status === 'inProgress';
 const selectionConfig = selection => ({ model: selection.model, ...(selection.effort ? { config: { model_reasoning_effort: selection.effort } } : {}) });
+const processMessage = item => item.role === 'tool' || (item.role === 'assistant' && item.phase === 'commentary');
+
+// Keep the transcript in chronological order, but do not let a long command log
+// evict the user's question or the final answer from the bounded view.
+export function retainMessages(messages, limit = 400) {
+  if (messages.length <= limit) return messages;
+  const primary = messages.filter(item => !processMessage(item)).slice(-limit);
+  const selected = new Set(primary);
+  for (const item of messages.filter(processMessage).slice(-Math.max(0, limit - primary.length))) {
+    if (selected.size < limit) selected.add(item);
+  }
+  return messages.filter(item => selected.has(item));
+}
+
+export function viewRevision(view) {
+  const { readAt, detailsRevision, loadingStage, ...thread } = view.thread;
+  return createHash('sha256').update(JSON.stringify({ ...view, revision: undefined, thread })).digest('hex').slice(0, 24);
+}
+
+export function stageView(view, stage = 'full', detailsRevision = viewRevision(view)) {
+  let messages = view.thread.messages || [];
+  if (stage === 'recent') {
+    let segment = 0;
+    const grouped = messages.map(item => {
+      if (item.role === 'user' && !item.turnId) segment++;
+      return { item, key: item.turnId || `unassigned:${segment}` };
+    });
+    const turns = new Set([...new Set(grouped.map(entry => entry.key))].slice(-10));
+    messages = grouped.filter(entry => turns.has(entry.key)).map(({ item }) => processMessage(item)
+      ? { ...item, text: item.role === 'tool' ? (item.text || '执行记录').split('\n')[0].slice(0, 160) : '思考与过程', deferred: true }
+      : item);
+  }
+  const result = { ...view, thread: { ...view.thread, messages, loadingStage: stage, detailsRevision } };
+  // Stage is part of the validator: a lightweight response must never validate a full one.
+  result.revision = createHash('sha256').update(`${stage}:${detailsRevision}:${viewRevision(result)}`).digest('hex').slice(0, 24);
+  return result;
+}
 function message(item, turnId = null, index = 0) {
   const identity = { id: item.id || `${turnId || 'unknown'}:${item.type}:${index}`, turnId };
   if (item.type === 'userMessage') return { ...identity, role: 'user', text: (item.content || []).map(c => c.text || (c.type === 'image' ? '[图片]' : '')).join('\n') };
@@ -25,6 +62,7 @@ export class Tasks {
     this.file = path.join(directory, 'tasks.json');
     this.owned = new Map();
     this.cache = new Map();
+    this.readPending = new Map();
     this.loaded = new Set();
     this.locks = new Set();
     this.stopLocks = new Set();
@@ -83,20 +121,28 @@ export class Tasks {
     const latest = thread.turns?.at(-1);
     const owned = this.owned.get(thread.id);
     const messages = (thread.turns || []).flatMap(turn => (turn.items || []).map((item, index) => message(item, turn.id, index)).filter(Boolean));
-    return { id: thread.id, title: owned?.title || thread.name || thread.preview || '未命名任务', cwd: thread.cwd, messages: messages.slice(-400), status: active(thread.status) || latest?.status === 'inProgress' ? 'running' : latest?.status === 'failed' ? 'error' : 'idle', turnId: latest?.status === 'inProgress' ? latest.id : null, updatedAt: (thread.updatedAt || 0) * 1000, readAt: Date.now(), error: latest?.error?.message || null, model: thread.model || owned?.model || null, effort: thread.reasoningEffort || owned?.effort || null, forkedFromId: thread.forkedFromId || owned?.forkedFromId || null };
+    return { id: thread.id, title: owned?.title || thread.name || thread.preview || '未命名任务', cwd: thread.cwd, messages: retainMessages(messages), status: active(thread.status) || latest?.status === 'inProgress' ? 'running' : latest?.status === 'failed' ? 'error' : 'idle', turnId: latest?.status === 'inProgress' ? latest.id : null, updatedAt: (thread.updatedAt || 0) * 1000, readAt: Date.now(), error: latest?.error?.message || null, model: thread.model || owned?.model || null, effort: thread.reasoningEffort || owned?.effort || null, forkedFromId: thread.forkedFromId || owned?.forkedFromId || null };
   }
-  async get(id) {
+  async get(id, options = {}) {
     await this.ready();
     let cached = this.cache.get(id);
-    if (cached && ((this.owned.has(id) && cached.status === 'running') || Date.now() - cached.readAt < 3000)) return this.view(cached);
-    const { thread } = await this.bridge.request('thread/read', { threadId: id, includeTurns: true });
-    cached = this.hydrate(thread);
-    this.cache.set(id, cached);
-    return this.view(cached);
+    if (!cached || !((this.owned.has(id) && cached.status === 'running') || Date.now() - cached.readAt < 3000)) {
+      if (!this.readPending.has(id)) {
+        const pending = this.bridge.request('thread/read', { threadId: id, includeTurns: true }).then(({ thread }) => {
+          if (thread?.id !== id) throw new AccessError(502, 'Codex 返回的会话编号不匹配。');
+          const current = this.hydrate(thread);
+          this.cache.set(id, current);
+          return current;
+        }).finally(() => this.readPending.delete(id));
+        this.readPending.set(id, pending);
+      }
+      cached = await this.readPending.get(id);
+    }
+    return stageView(this.view(cached), options.stage);
   }
   view(t) {
     const owned = this.owned.has(t.id);
-    return { thread: { ...t, messages: this.submitted.merge(t.id, t.messages), readOnly: !owned,
+    return { thread: { ...t, messages: this.submitted.merge(t.id, t.messages, retainMessages), readOnly: !owned,
       capabilities: { send: owned, stop: owned, approvals: owned, modelSelection: owned, effortSelection: owned, fork: true },
       ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) }, approvals: [...this.approvals.values()].filter(a => a.threadId === t.id).map(({ rpcId, ...a }) => a) };
   }
@@ -107,7 +153,7 @@ export class Tasks {
       const existing = t.messages.findIndex(value => value.id === parsed.id);
       if (existing < 0) t.messages.push(parsed); else t.messages[existing] = parsed;
     }
-    t.messages = t.messages.slice(-400);
+    t.messages = retainMessages(t.messages);
   }
   validatePrompt(prompt) {
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 30000) throw new AccessError(400, '请输入 1–30000 个字符的任务指令。');

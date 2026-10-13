@@ -13,8 +13,9 @@ const repository = fileURLToPath(new URL('../', import.meta.url));
 const output = path.resolve(process.env.MOBILE_UI_OUTPUT || path.join(os.tmpdir(), `codex-mobile-ui-${Date.now()}`));
 const editions = (process.env.MOBILE_UI_EDITIONS || 'windows10,windows11,macos').split(',');
 assert.ok(editions.every(id => ['windows10', 'windows11', 'macos'].includes(id)), 'Unknown edition');
+const versions = Object.fromEntries(await Promise.all(editions.map(async id => [id, JSON.parse(await readFile(path.join(repository, 'editions', id, 'package.json'), 'utf8')).version])));
 await mkdir(output, { recursive: true });
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const malicious = '<img src=x onerror="window.__messageMarkupRan=true"><script>window.__messageMarkupRan=true</script>';
 const model = { model: 'mock-model', displayName: 'Mock model', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: '中等' }] };
@@ -79,7 +80,7 @@ const server = createServer(async (request, response) => {
     if (pathname.startsWith('/api/')) {
       reads.push({ pathname, query: Object.fromEntries(url.searchParams) });
       let data;
-      if (pathname === '/api/bootstrap') data = { role: 'controller', csrfToken: 'mock-only', permissions, status: { codex: 'connected', mode: 'standalone', hostname: '模拟电脑' }, desktop: { connected: true }, app: { version: '1.0.1' } };
+      if (pathname === '/api/bootstrap') data = { role: 'controller', csrfToken: 'mock-only', permissions, status: { codex: 'connected', mode: 'standalone', hostname: '模拟电脑' }, desktop: { connected: true }, app: { version: versions[currentEdition] } };
       else if (pathname === '/api/threads') data = { threads: Object.values(fixtures).map(({ messages, ...thread }) => thread) };
       else if (pathname.startsWith('/api/threads/')) { const thread = fixtures[decodeURIComponent(pathname.split('/').at(-1))]; assert.ok(thread, 'Only fixture threads can be read'); data = { thread, approvals: [] }; }
       else if (pathname === '/api/models') data = { models: [model] };
@@ -89,7 +90,7 @@ const server = createServer(async (request, response) => {
         data = { projectId, path: reference, name: '过程 报告.txt', mime: 'text/plain', size: Buffer.byteLength(previewText) };
       } else if (pathname === `/api/projects/${projectId}/preview`) {
         assert.equal(url.searchParams.get('path'), reference); data = { name: '过程 报告.txt', text: previewText };
-      } else if (pathname === '/api/updates') data = { status: 'upToDate', currentVersion: '1.0.1', latestVersion: '1.0.1', autoUpdate: false };
+      } else if (pathname === '/api/updates') data = { status: 'upToDate', currentVersion: versions[currentEdition], latestVersion: versions[currentEdition], autoUpdate: false };
       else if (pathname === '/api/permissions') data = permissions;
       else { unexpected.push(`GET ${pathname}`); json(response, 404, {}); return; }
       json(response, 200, data); return;
@@ -109,13 +110,16 @@ catch (error) { await new Promise(resolve => server.close(resolve)); throw error
 
 const processGroups = page => page.locator('#messages > details.process-disclosure');
 const turnGroup = (page, id) => page.locator(`#messages > details.process-disclosure[data-turn-id="${id}"]`);
-const legacyGroup = (page, label, anonymous = false) => processGroups(page).filter({ has: page.locator('.message-content', { hasText: `${anonymous ? '无 ID 公开过程' : '旧历史公开过程'} ${label}` }) });
+// A collapsed group need not construct its message DOM. Legacy rounds have no
+// turn id and retain their chronological order independently of lazy content.
+const legacyGroup = (page, label, anonymous = false) => page.locator('#messages > details.process-disclosure[data-turn-id=""]').nth(anonymous ? 1 : 0);
 async function openThread(page, label) {
   await page.locator('#sidebar-open').tap();
   await page.locator('.thread-item').filter({ has: page.locator('.thread-item-title', { hasText: `模拟任务 ${label}` }) }).tap();
   await page.waitForFunction(value => document.querySelector('#thread-title').textContent === `模拟任务 ${value}` && document.querySelector('#messages').textContent.includes(`最终答复一 ${value}`), label);
 }
 async function assertOpen(locator, expected) {
+  await locator.waitFor({ state: 'attached' });
   assert.equal(await locator.count(), 1, 'Exactly one disclosure must exist for this group');
   assert.equal(await locator.evaluate(element => element.open), expected, `Disclosure should be ${expected ? 'open' : 'closed'}`);
 }
@@ -123,6 +127,7 @@ async function toggle(locator) {
   const wasOpen = await locator.evaluate(element => element.open);
   await locator.locator(':scope > summary').tap();
   await locator.page().waitForFunction(({ key, expected }) => [...document.querySelectorAll('#messages details')].find(element => element.dataset.disclosureKey === key)?.open === expected, { key: await locator.getAttribute('data-disclosure-key'), expected: !wasOpen });
+  if (!wasOpen) await locator.locator(':scope > .process-content > .message, :scope > .process-content > .turn-activity, :scope > .message-content').first().waitFor({ state: 'attached' });
 }
 async function assertHiddenGroup(locator) {
   await assertOpen(locator, false);
@@ -146,9 +151,13 @@ async function assertStructure(page, label) {
   assert.equal(await processGroups(page).count(), 4, 'One process disclosure per explicit or legacy round');
   assert.equal(await page.locator('#messages > article.message.tool').count(), 0, 'Tool rows cannot remain outside the round disclosure');
   assert.equal(await page.locator('.process-disclosure .process-disclosure').count(), 0);
-  assert.equal(await turnGroup(page, 'turn-one').locator('.process-content > article.message').count(), 5, 'Both commentary messages and all three command/file records share the round');
-  assert.equal(await turnGroup(page, 'turn-two').locator('.process-content > article.message.tool').count(), 2, 'A tools-only round still has one disclosure');
-  assert.equal(await turnGroup(page, 'turn-one').locator('article.message.user').count(), 0, 'Same-turn steering stays outside the process group');
+  for (const [turn, selector, count] of [['turn-one', 'article.message', 5], ['turn-two', 'article.message.tool', 2]]) {
+    const group = turnGroup(page, turn), open = await group.evaluate(element => element.open);
+    if (!open) await toggle(group);
+    assert.equal(await group.locator('.process-content > ' + selector).count(), count, 'All process rows appear when expanded');
+    assert.equal(await group.locator('article.message.user').count(), 0, 'Same-turn steering stays outside the process group');
+    if (!open) await toggle(group);
+  }
   assert.equal(await legacyGroup(page, label).getAttribute('data-turn-id'), '');
   assert.equal(await legacyGroup(page, label, true).getAttribute('data-turn-id'), '');
   const keys = await processGroups(page).evaluateAll(elements => elements.map(element => ({ key: element.dataset.processKey, disclosure: element.dataset.disclosureKey })));
@@ -173,7 +182,12 @@ async function checkLayout(page) {
   return bounds;
 }
 async function waitForContent(page, text) {
-  await page.waitForFunction(value => document.querySelector('#messages').textContent.includes(value), text, { timeout: 7000 });
+  // An earlier read can still be in flight when the fixture changes. Request a
+  // fresh view after it settles instead of assuming a fixed fast idle poll.
+  await page.waitForFunction(value => {
+    if (document.querySelector('#messages').textContent.includes(value)) return true;
+    document.dispatchEvent(new Event('visibilitychange')); return false;
+  }, text, { timeout: 7000, polling: 300 });
 }
 async function openGroupFile(page, label) {
   const button = turnGroup(page, 'turn-one').getByRole('button', { name: label, exact: true });
@@ -195,6 +209,7 @@ async function checkLateTurnIds(page) {
   await toggle(processGroups(page));
   fixtures['thread-c'].messages.find(item => item.id === 'split-commentary').turnId = 'late-turn-a';
   fixtures['thread-c'].messages.find(item => item.id === 'split-tool').turnId = 'late-turn-b';
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForFunction(() => document.querySelectorAll('#messages > details.process-disclosure').length === 2, null, { timeout: 7000 });
   const one = turnGroup(page, 'late-turn-a'), two = turnGroup(page, 'late-turn-b');
   assert.notEqual(await one.getAttribute('data-disclosure-key'), await two.getAttribute('data-disclosure-key'), 'Split rounds must never reuse one disclosure key');
@@ -217,11 +232,11 @@ try {
       if (new URL(route.request().url()).origin === origin) return route.continue();
       unexpected.push('External browser request: ' + route.request().url()); return route.abort();
     });
-    await context.addInitScript(id => {
+    await context.addInitScript(({ id, version }) => {
       localStorage.setItem(`codex-mobile.${id}.appearance.v1`, JSON.stringify({ theme: 'blue', font: 'system', size: 22 }));
-      localStorage.setItem(`codex-mobile.${id}.notice.lastVersion`, '1.0.1');
+      localStorage.setItem(`codex-mobile.${id}.notice.lastVersion`, version);
       localStorage.setItem(`codex-mobile.${id}.permissions-guide-dismissed.v1`, 'true');
-    }, edition);
+    }, { id: edition, version: versions[edition] });
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -255,8 +270,12 @@ try {
     // Collapsing hides even already-open tool details and new same-turn records.
     await toggle(turnGroup(page, 'turn-one'));
     fixtures['thread-a'].messages.splice(fixtures['thread-a'].messages.findIndex(item => item.id === 'final-one'), 0, { id: 'late-tool', role: 'tool', turnId: 'turn-one', text: '同轮追加工具记录 A' });
-    await waitForContent(page, '同轮追加工具记录 A');
+    const lateToolRead = page.waitForResponse(async response => new URL(response.url()).pathname === '/api/threads/thread-a' && JSON.stringify(await response.json()).includes('同轮追加工具记录 A'));
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await lateToolRead;
+    await assertHiddenGroup(turnGroup(page, 'turn-one'));
+    await toggle(turnGroup(page, 'turn-one')); await waitForContent(page, '同轮追加工具记录 A');
     assert.equal(await turnGroup(page, 'turn-one').locator('.process-content > article.message').count(), 6);
+    await toggle(turnGroup(page, 'turn-one'));
     assert.equal(await processGroups(page).count(), 4);
     await assertHiddenGroup(turnGroup(page, 'turn-one')); await assertVisibleOutsideProcess(page, fixtures['thread-a']);
 
@@ -287,7 +306,7 @@ try {
     // A live CLI round arrives in stages, then gets a final answer outside.
     fixtures['thread-b'].status = 'running'; fixtures['thread-b'].turnId = 'turn-stream';
     fixtures['thread-b'].messages.push({ id: 'stream-user', role: 'user', turnId: 'turn-stream', text: '新增流式轮指令 B' }, { id: 'stream-commentary', role: 'assistant', phase: 'commentary', turnId: 'turn-stream', text: '新增流式公开过程 B' });
-    await waitForContent(page, '新增流式公开过程 B');
+    await waitForContent(page, '新增流式轮指令 B');
     assert.equal(await processGroups(page).count(), 5); await assertHiddenGroup(turnGroup(page, 'turn-stream')); await assertOpen(turnGroup(page, 'turn-two'), true);
     await toggle(turnGroup(page, 'turn-stream'));
     fixtures['thread-b'].messages.push({ id: 'stream-command', role: 'tool', turnId: 'turn-stream', text: '新增流式工具输出 B' });
@@ -303,7 +322,9 @@ try {
     const promoted = fixtures['thread-b'].messages.find(item => item.id === 'process-one');
     promoted.phase = 'final_answer'; promoted.text = '过程消息转为最终答复后必须可见。';
     await waitForContent(page, promoted.text); await assertVisibleOutsideProcess(page, fixtures['thread-b']); await assertHiddenGroup(turnGroup(page, 'turn-one'));
+    await toggle(turnGroup(page, 'turn-one'));
     assert.equal(await turnGroup(page, 'turn-one').locator('.process-content > article.message').count(), 4);
+    await toggle(turnGroup(page, 'turn-one'));
     assert.equal(await processGroups(page).count(), 5); await checkLayout(page);
     await checkLateTurnIds(page);
     assert.deepEqual(errors, [], 'No browser or CSP errors');

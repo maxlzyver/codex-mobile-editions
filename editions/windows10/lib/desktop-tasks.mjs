@@ -1,5 +1,6 @@
 import { AccessError } from './security.mjs';
 import { SubmittedMessages, transcriptMessages } from './submitted-messages.mjs';
+import { retainMessages, stageView } from './tasks.mjs';
 
 const choice = value => value !== undefined && value !== null && value !== '';
 const text = value => typeof value === 'string' ? value : typeof value?.text === 'string' ? value.text : '';
@@ -31,7 +32,7 @@ function unpack(result, allowText = false) {
 }
 
 function messages(turns) {
-  return turns.flatMap(turn => (turn.items || []).map((item, index) => {
+  return retainMessages(turns.flatMap(turn => (turn.items || []).map((item, index) => {
     const identity = { id: item.id || `${turn.id || 'unknown'}:${item.type}:${index}`, turnId: turn.id || null };
     if (item.type === 'userMessage') return { ...identity, role: 'user', text: (item.content || []).map(content => text(content.text) || (content.type === 'image' ? '[图片]' : '')).join('\n') };
     if (item.type === 'agentMessage') return { ...identity, role: 'assistant', text: text(item.text), phase: item.phase };
@@ -39,7 +40,7 @@ function messages(turns) {
     if (item.type === 'fileChange') return { ...identity, role: 'tool', text: '文件修改\n' + (item.changes || []).map(change => `${change.path}\n${clip(change.diff)}`).join('\n'), status: item.status };
     // Internal reasoning, context compaction, and sub-agent coordination are not chat messages.
     return null;
-  }).filter(Boolean)).slice(-400);
+  }).filter(Boolean)));
 }
 
 function mergeHistory(saved, live) {
@@ -68,6 +69,12 @@ export class DesktopTasks {
     this.desktop = desktopBridge;
     if (desktopBridge?.options?.hostId && desktopBridge.options.hostId !== 'local') throw new Error('此控制台只支持当前电脑的原生 Codex。');
     this.nativeCache = new Map();
+    this.nativeSnapshots = new Map();
+    this.nativePending = new Map();
+    this.nativeSequence = 0;
+    this.nativeViewSequences = new Map();
+    this.savedHistory = new Map();
+    this.savedPending = new Map();
     this.summaries = new Map();
     this.locks = new Set();
     this.nativeList = null;
@@ -76,6 +83,7 @@ export class DesktopTasks {
     this.retryAfter = 0;
     this.lastNativeError = null;
     this.readCacheMs = options.readCacheMs ?? 1000;
+    this.historyCacheMs = options.historyCacheMs ?? 30000;
     this.listCacheMs = options.listCacheMs ?? 3000;
     this.retryMs = options.retryMs ?? 5000;
     desktopBridge?.on?.('state', state => { if (!state.connected) this.nativeListTime = 0; });
@@ -104,7 +112,7 @@ export class DesktopTasks {
 
   decorate(view, kind, available = false) {
     const meta = this.meta(kind, available);
-    return { ...view, thread: { ...view.thread, ...(Array.isArray(view.thread.messages) ? { messages: this.submitted.merge(view.thread.id, view.thread.messages) } : {}), ...meta, readOnly: !meta.capabilities.send, ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) } };
+    return { ...view, thread: { ...view.thread, ...(Array.isArray(view.thread.messages) ? { messages: this.submitted.merge(view.thread.id, view.thread.messages, retainMessages) } : {}), ...meta, readOnly: !meta.capabilities.send, ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) } };
   }
 
   async tools() {
@@ -151,44 +159,95 @@ export class DesktopTasks {
     return [...all.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   }
 
-  async nativeRead(id, fresh = false) {
-    const cached = this.nativeCache.get(id);
-    if (!fresh && cached && Date.now() - cached.thread.readAt < this.readCacheMs && this.desktop?.state?.connected) return this.decorate(cached, 'desktop', true);
-    await this.tools();
-    const data = unpack(await this.desktop.callReadOnly('read_thread', { threadId: id, hostId: 'local', turnLimit: 10, includeOutputs: true, maxOutputCharsPerItem: 20000 }, { callerThreadId: id, hostId: 'local' }));
-    if (data.thread?.id !== id || data.thread?.hostId !== 'local' || data.thread?.kind !== 'codex') throw new AccessError(403, '只允许读取当前电脑上的 Codex 聊天。');
-    const turns = [...(data.turns || [])];
-    if (/desc|newest/i.test(data.page?.order || '')) turns.reverse();
+  async savedRead(id) {
+    const cached = this.savedHistory.get(id);
+    const snapshot = this.nativeSnapshots.get(id);
+    const running = snapshot && status(snapshot.data.thread.status, snapshot.turns.at(-1)) === 'running';
+    const cacheMs = running ? Math.min(3000, this.historyCacheMs) : this.historyCacheMs;
+    if (cached && Date.now() - cached.at < cacheMs) return cached.view;
+    if (this.savedPending.has(id)) return this.savedPending.get(id);
+    const pending = Promise.resolve().then(() => this.tasks.get(id)).then(view => {
+      this.savedHistory.delete(id);
+      this.savedHistory.set(id, { view, at: Date.now() });
+      if (this.savedHistory.size > 100) this.savedHistory.delete(this.savedHistory.keys().next().value);
+      return view;
+    }).finally(() => this.savedPending.delete(id));
+    this.savedPending.set(id, pending);
+    return pending;
+  }
+
+  async nativeSnapshot(id, fresh = false) {
+    const cached = this.nativeSnapshots.get(id);
+    if (!fresh && cached && Date.now() - cached.readAt < this.readCacheMs && this.desktop?.state?.connected) return cached;
+    if (!fresh && this.nativePending.has(id)) return this.nativePending.get(id);
+    const sequence = ++this.nativeSequence;
+    const pending = (async () => {
+      await this.tools();
+      const data = unpack(await this.desktop.callReadOnly('read_thread', { threadId: id, hostId: 'local', turnLimit: 10, includeOutputs: true, maxOutputCharsPerItem: 20000 }, { callerThreadId: id, hostId: 'local' }));
+      if (data.thread?.id !== id || data.thread?.hostId !== 'local' || data.thread?.kind !== 'codex') throw new AccessError(403, '只允许读取当前电脑上的 Codex 聊天。');
+      const turns = [...(data.turns || [])];
+      if (/desc|newest/i.test(data.page?.order || '')) turns.reverse();
+      const snapshot = { data, turns, messages: messages(turns), readAt: Date.now(), sequence };
+      // A fresh read (for example after sending) may finish before an older
+      // background request. Only the newer request can advance the shared cache.
+      if (!this.nativeSnapshots.has(id) || this.nativeSnapshots.get(id).sequence < sequence) {
+        this.nativeSnapshots.delete(id);
+        this.nativeSnapshots.set(id, snapshot);
+        if (this.nativeSnapshots.size > 100) this.nativeSnapshots.delete(this.nativeSnapshots.keys().next().value);
+      }
+      return snapshot;
+    })().finally(() => { if (this.nativePending.get(id) === pending) this.nativePending.delete(id); });
+    this.nativePending.set(id, pending);
+    return pending;
+  }
+
+  async nativeRead(id, fresh = false, stage = 'full') {
+    // Full reads fetch both sources concurrently. The first screen only waits for
+    // the native ten-turn snapshot; slower saved history warms independently.
+    const savedPromise = stage === 'full' ? this.savedRead(id).catch(() => null) : null;
+    let snapshot = await this.nativeSnapshot(id, fresh);
+    const saved = (savedPromise ? await savedPromise : this.savedHistory.get(id)?.view)?.thread;
+    const newer = this.nativeSnapshots.get(id);
+    if (newer && newer.sequence > snapshot.sequence) snapshot = newer;
+    const { data, turns } = snapshot;
     const latest = turns.at(-1);
-    let saved;
-    try { saved = (await this.tasks.get(id)).thread; } catch { /* Native reads can still work when the companion process is unavailable. */ }
     const prior = saved || this.summaries.get(id) || this.tasks.cache.get(id) || {};
-    const combined = mergeHistory(transcriptMessages(saved?.messages || []), messages(turns));
+    const combined = mergeHistory(transcriptMessages(saved?.messages || []), snapshot.messages);
     const thread = {
       id, title: data.thread.title || prior.title || '未命名任务', cwd: data.thread.cwd || prior.cwd,
       status: status(data.thread.status, latest), nativeStatus: rawStatus(data.thread.status),
       turnId: latest?.status === 'inProgress' ? latest.id : null,
       model: data.thread.model || prior.model || null, effort: data.thread.reasoningEffort || prior.effort || null,
-      messages: combined.slice(-400), updatedAt: timestamp(data.thread.updatedAt) || Date.now(), readAt: Date.now(),
+      messages: retainMessages(combined), updatedAt: timestamp(data.thread.updatedAt) || prior.updatedAt || 0, readAt: snapshot.readAt,
       error: latest?.error?.message || null, hostId: 'local', historyHasMore: Boolean(data.page?.hasMore),
     };
     const view = { thread, approvals: [], nativeAttention: { needsDesktop: true, message: '原生任务的停止与审批需在桌面端处理。' } };
-    this.nativeCache.set(id, view);
-    return this.decorate(view, 'desktop', true);
+    if (snapshot.sequence >= (this.nativeViewSequences.get(id) || 0)) {
+      this.nativeCache.set(id, view);
+      this.nativeViewSequences.set(id, snapshot.sequence);
+    }
+    if (stage === 'recent') this.savedRead(id).catch(() => {});
+    return stageView(this.decorate(view, 'desktop', true), stage);
   }
 
-  async get(id) {
-    if (this.owned.has(id)) return this.decorate(await this.tasks.get(id), 'companion');
-    try { return await this.nativeRead(id); }
+  async get(id, options = {}) {
+    const stage = options.stage || 'full';
+    if (this.owned.has(id)) return stageView(this.decorate(await this.tasks.get(id), 'companion'), stage);
+    try { return await this.nativeRead(id, false, stage); }
     catch (error) {
       this.failed(error);
       const cached = this.nativeCache.get(id);
       let saved;
-      try { saved = await this.tasks.get(id); } catch (savedError) { if (!cached) throw savedError; }
-      const fallback = saved || cached;
-      const view = this.decorate({ ...fallback, thread: { ...fallback.thread, messages: mergeHistory(transcriptMessages(cached?.thread.messages || []), transcriptMessages(saved?.thread.messages || [])) } }, 'desktop');
+      try { saved = stage === 'recent' && cached ? this.savedHistory.get(id)?.view : await this.savedRead(id); } catch (savedError) { if (!cached) throw savedError; }
+      // Saved history can lag behind the native answer even when it was read
+      // moments ago. It wins overlapping items only when its source timestamp
+      // establishes that it contains a newer transcript; saved-only items remain.
+      const savedNewer = !cached || Number(saved?.thread.updatedAt || 0) > Number(cached.thread.updatedAt || 0);
+      const fallback = savedNewer ? saved : cached;
+      const older = savedNewer ? cached : saved;
+      const view = this.decorate({ ...fallback, thread: { ...fallback.thread, messages: retainMessages(mergeHistory(transcriptMessages(older?.thread.messages || []), transcriptMessages(fallback?.thread.messages || []))) } }, 'desktop');
       view.thread.nativeError = this.lastNativeError;
-      return view;
+      return stageView(view, stage);
     }
   }
 

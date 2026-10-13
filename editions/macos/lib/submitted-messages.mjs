@@ -82,7 +82,7 @@ export class SubmittedMessages {
     }
   }
 
-  merge(threadId, messages = []) {
+  merge(threadId, messages = [], retain = values => values.slice(-400)) {
     const original = transcriptMessages(messages);
     const records = this.records.filter(record => record.threadId === threadId);
     if (!records.length) return original;
@@ -125,6 +125,6 @@ export class SubmittedMessages {
       combined.push(...(insertions.get(index) || []));
       if (index < original.length) combined.push(overlays.get(index) || original[index]);
     }
-    return combined.slice(-400);
+    return retain(combined);
   }
 }

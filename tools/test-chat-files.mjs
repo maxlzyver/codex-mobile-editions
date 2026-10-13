@@ -12,9 +12,10 @@ const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODUL
 const repository = fileURLToPath(new URL('../', import.meta.url));
 const output = path.resolve(process.env.MOBILE_UI_OUTPUT || path.join(os.tmpdir(), `codex-chat-files-${Date.now()}`));
 const editions = (process.env.MOBILE_UI_EDITIONS || 'windows10,windows11,macos').split(',');
+const versions = Object.fromEntries(await Promise.all(editions.map(async id => [id, JSON.parse(await readFile(path.join(repository, 'editions', id, 'package.json'), 'utf8')).version])));
 assert.ok(editions.every(id => ['windows10', 'windows11', 'macos'].includes(id)));
 await mkdir(output, { recursive: true });
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const projectId = 'a'.repeat(24), otherProjectId = 'b'.repeat(24);
 const reportText = '生成的研究报告，含中文和空格。\n<script>window.__previewExecuted=true</script>';
@@ -59,12 +60,12 @@ const server = createServer(async (request, response) => {
     if (request.method !== 'GET') { errors.push('Unexpected write: ' + request.method + ' ' + url.pathname); json(response, 405, { error: 'Only fixture reads are permitted.' }); return; }
     if (url.pathname.startsWith('/api/')) {
       requests.push({ path: url.pathname, query: Object.fromEntries(url.searchParams) });
-      if (url.pathname === '/api/bootstrap') json(response, 200, { role: 'controller', csrfToken: 'mock-only', status: { codex: 'connected', mode: 'standalone', hostname: '模拟电脑' }, desktop: { connected: true }, app: { version: '1.0.1' } });
+      if (url.pathname === '/api/bootstrap') json(response, 200, { role: 'controller', csrfToken: 'mock-only', status: { codex: 'connected', mode: 'standalone', hostname: '模拟电脑' }, desktop: { connected: true }, app: { version: versions[edition] } });
       else if (url.pathname === '/api/threads') json(response, 200, { threads: [fixture.thread] });
       else if (url.pathname === '/api/threads/mock-files') json(response, 200, { thread: fixture.thread, approvals: [] });
       else if (url.pathname === '/api/models') json(response, 200, { models: [{ model: 'gpt-5.4-mock', displayName: 'GPT-5.4 · 布局模拟', defaultReasoningEffort: 'high', supportedReasoningEfforts: [{ reasoningEffort: 'high', description: '高' }] }] });
       else if (url.pathname === '/api/projects') json(response, 200, { projects: [{ id: projectId, path: fixture.cwd, name: '示例项目：报告与研究资料', exists: true }, { id: otherProjectId, path: fixture.otherCwd, name: '另一个授权项目', exists: true }] });
-      else if (url.pathname === '/api/updates') json(response, 200, { status: 'upToDate', currentVersion: '1.0.1', latestVersion: '1.0.1' });
+      else if (url.pathname === '/api/updates') json(response, 200, { status: 'upToDate', currentVersion: versions[edition], latestVersion: versions[edition] });
       else if (url.pathname === '/api/projects/' + projectId + '/resolve') {
         const file = fixture.references.get(url.searchParams.get('reference'));
         if (!file) { errors.push('Unexpected reference: ' + url.searchParams.get('reference')); json(response, 400, { error: '无效文件引用。' }); }
@@ -120,11 +121,11 @@ try {
     edition = id; fixture = makeFixture(id);
     const baseline = requests.length;
     const context = await browser.newContext({ viewport: { width, height: 844 }, hasTouch: true, isMobile: true, reducedMotion: 'reduce', acceptDownloads: true });
-    await context.addInitScript(({ id, size }) => {
+    await context.addInitScript(({ id, size, version }) => {
       localStorage.setItem('codex-mobile.' + id + '.appearance.v1', JSON.stringify({ theme: 'blue', font: 'system', size }));
-      localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', '1.0.1');
+      localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', version);
       localStorage.setItem('codex-mobile.' + id + '.permissions-guide-dismissed.v1', 'true');
-    }, { id, size });
+    }, { id, size, version: versions[id] });
     const page = await context.newPage();
     const browserErrors = [];
     page.on('pageerror', error => browserErrors.push(error.message));

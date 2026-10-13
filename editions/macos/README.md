@@ -1,19 +1,23 @@
-# Codex 移动助手 · macOS 专用版 V1.0.1
+# Codex 移动助手 · macOS 专用版 V1.1.0
 
-版本 **1.0.1** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [邮件反馈](mailto:lzyuan666666@gmail.com)
+版本 **1.1.0** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [邮件反馈](mailto:lzyuan666666@gmail.com)
 
 用手机浏览器查看 Mac 上 Codex 的任务与输出、选择模型和思考强度、远程发送指令，并预览和下载本地项目文件。支持 Wi-Fi 配对、互联网临时连接、主题字体设置、分平台自动更新和自愿赞助入口。
 
-## V1.0.1 更新
+## V1.1.0 更新
+
+近期结果优先显示，历史和执行详情后台补齐；打开过的聊天可立即显示内存缓存，折叠内容按需生成。空闲时减少刷新，保留阅读位置。采用作者提供的新图标。详情见 [本版说明](docs/UPDATE-NOTES.md)。
+
+## V1.0.1 已有功能
 
 - 同一轮的公开过程说明、命令执行、文件修改和工具记录统一折叠，默认收起；最终答复与用户指令始终显示，实时刷新和切换聊天保留开关选择。
 - 已确认接收的指令保留本地回执，刷新页面后仍可查看；真实聊天记录同步后自动去重，并清楚区分发送中、待同步和失败状态。
 
 ## 系统与安装
 
-本包为 **V1.0.1 重制版**，保留原版全部功能。已装旧 V1.0.1 时不会提示同版本更新，请按[保留数据换装说明](docs/V1.0.1-REBUILD.md)覆盖程序文件；V1.0.0 可从程序内更新。[重制版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.0.1-rebuild.1)。
+当前版本为 **V1.1.0**，保留此前全部功能；已安装 1.0.0 / 1.0.1 专用版可通过“检查更新”升级。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.1.0)。
 
-- **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.0.1-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
+- **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.1.0-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
 - Mac 需自行安装并登录兼容的 Codex 桌面应用或 CLI；包内不包含 Codex 程序和账户。
 - 完整解压到当前用户可写目录，保持目录结构。不能使用 GitHub 自动生成的 Source code ZIP 代替完整安装包。
 
@@ -59,4 +63,4 @@ Wi-Fi 模式使用局域网 HTTP，请使用可信网络。互联网模式经 Cl
 
 V1.0.0 基线在 Windows 开发主机运行跨平台协议和独立安装器测试，Mac 启动、进程、隧道和回滚逻辑有专用测试。GitHub Actions 配置了 Apple 芯片和 Intel 的 macOS 运行器，但这些验证不等同于真实 Finder、Codex 桌面和手机网络端到端验收；没有本地 Mac 实机完整测试。详情见 [兼容性说明](docs/COMPATIBILITY.md) 和项目 Actions 结果。
 
-V1.0.1 本次回归结果见对应发布记录和 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)，不以既有测试结果代替新版验证。
+V1.1.0 本次回归结果见对应发布记录和 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)，不以既有测试结果代替新版验证。

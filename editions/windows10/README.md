@@ -1,22 +1,26 @@
-# Codex 移动助手 · Windows 10 专用版 V1.0.1
+# Codex 移动助手 · Windows 10 专用版 V1.1.0
 
-版本：**1.0.1** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [反馈邮件](mailto:lzyuan666666@gmail.com)
+版本：**1.1.0** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [反馈邮件](mailto:lzyuan666666@gmail.com)
 
 在手机浏览器查看电脑 Codex 的任务、发送指令、选择模型和思考强度，并预览、下载本地项目文件。支持同一 Wi-Fi 配对，以及 Cloudflare 临时互联网连接。主题、字号、字体种类、主色和文字颜色可在“设置”调整；赞助自愿，不影响功能使用。
 
 这是独立社区工具。手机沿用电脑已登录的 Codex，无需再次输入 OpenAI 账号或 API 密钥；首次连接仍需扫码并由电脑批准。
 
-## V1.0.1 更新
+## V1.1.0 更新
+
+近期结果优先显示，历史和执行详情后台补齐；打开过的聊天可立即显示内存缓存，折叠内容按需生成。空闲时减少刷新，保留阅读位置。采用作者提供的新图标。详情见 [本版说明](docs/UPDATE-NOTES.md)。
+
+## V1.0.1 已有功能
 
 - 同一轮的公开过程说明、命令执行、文件修改和工具记录统一折叠，默认收起；最终答复与用户指令始终显示，实时刷新和切换聊天保留开关选择。
 - 已确认接收的指令保留本地回执，刷新页面后仍可查看；真实聊天记录同步后自动去重，并清楚区分发送中、待同步和失败状态。
 
 ## 本版适用范围
 
-本包为 **V1.0.1 重制版**，保留原版全部功能。已装旧 V1.0.1 时不会提示同版本更新，请按[保留数据换装说明](docs/V1.0.1-REBUILD.md)覆盖程序文件；V1.0.0 可从程序内更新。[重制版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.0.1-rebuild.1)。
+当前版本为 **V1.1.0**，保留此前全部功能；已安装 1.0.0 / 1.0.1 专用版可通过“检查更新”升级。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.1.0)。
 
 - 仅适用于 **Windows 10 22H2、系统内部版本 19045–21999、原生 AMD64/x64**。拒绝 ARM64（包括 x64 模拟运行）和 32 位系统，也不会安装其他平台专用版。
-- 完整包为 **`codex-mobile-windows10-1.0.1-x64.zip`**，内置 Windows x64 Node.js 24 和 cloudflared；Codex 程序及账户不包含在内，需在目标电脑自行安装并登录兼容版本。
+- 完整包为 **`codex-mobile-windows10-1.1.0-x64.zip`**，内置 Windows x64 Node.js 24 和 cloudflared；Codex 程序及账户不包含在内，需在目标电脑自行安装并登录兼容版本。
 - 手机使用支持现代 JavaScript 和 Cookie 的浏览器，无需安装本工具的手机 App。
 - 电脑必须开机、联网、不休眠，移动助手后台必须运行；继续原桌面聊天还需兼容的 Codex 桌面端保持运行。
 
@@ -98,4 +102,4 @@ Windows 10、Windows 11、macOS 三个专用版均从 **V1.0 / 1.0.0** 重新开
 
 V1.0.0 基线在当时的 Windows 11 主机运行两版各自的核心套件（不含单独维护的更新器／安装器套件），**每版 96 项全部通过**。这些测试使用模拟连接与临时目录，不代表 Windows 10 实机运行通过。自动化测试覆盖协议、任务、模型、项目路径保护、手机权限和本地桌面适配。原生发送使用模拟接口验证参数与错误处理，不能据此宣称每个桌面版本都已真实端到端发送成功；该次验证没有向用户现有聊天发送测试指令。不同设备及真实手机 4G/5G 连通性需在目标环境确认。
 
-V1.0.1 本次回归结果见对应发布记录和 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)，不以既有测试结果代替新版验证。
+V1.1.0 本次回归结果见对应发布记录和 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)，不以既有测试结果代替新版验证。

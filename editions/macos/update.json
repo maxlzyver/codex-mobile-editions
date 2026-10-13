@@ -12,9 +12,9 @@
       "sha256": "2ae4212406f699b8574cf7c4fb6bf152ef306224b8d03027c9bc1343f507f827"
     },
     {
-      "bytes": 6606,
+      "bytes": 6791,
       "path": "README.md",
-      "sha256": "20b1f7686f084f8ecefc02a2bcc2602a0ff16294c1aac91d6bee849d9449e167"
+      "sha256": "2a12b690d1c0a98e9929067ff0234bbd0792575a757dd5662310fc25147b2254"
     },
     {
       "bytes": 456,
@@ -42,9 +42,9 @@
       "sha256": "a78ff5baea3a2f91bcb6f8eeecb27da56c9ab68e6189ed1b781dc9b436aebe27"
     },
     {
-      "bytes": 903,
+      "bytes": 1202,
       "path": "docs/UPDATE-NOTES.md",
-      "sha256": "c474ef53e5b99e32cacd67b3df781605f405c56c4511d54001688418950d2dc1"
+      "sha256": "154cfb32a0719419ba74a87f6d0d9f37f2802d9a2910932e7ff1c6b9c8600252"
     },
     {
       "bytes": 2828,
@@ -54,7 +54,7 @@
     {
       "bytes": 247,
       "path": "edition.json",
-      "sha256": "f2352d9de3238516a1825c4425e073ec77054ff6197479f670803368e4a94313"
+      "sha256": "c4e7435b8213efee1157ec15a8e89224e3888b271fd6cae4aadcc1bf04731160"
     },
     {
       "bytes": 541,
@@ -72,9 +72,9 @@
       "sha256": "bc42cc5d51249f72efa7ee30ae59fe6c2e702a9c88eb9e7367a4e52b65117a29"
     },
     {
-      "bytes": 16065,
+      "bytes": 19496,
       "path": "lib/desktop-tasks.mjs",
-      "sha256": "60c44533149581d3719b75815939d7c54b39ef7b3f1b58994c2cd941b26cccfc"
+      "sha256": "c15fa453fa29fefb317e11fcb9f43c0c6c68f2b7e63a4c4bee4f0837fca81fc5"
     },
     {
       "bytes": 21820,
@@ -102,14 +102,14 @@
       "sha256": "31b378b01796e67a30602a926483c89fc50589a4809ec07f05cf848517d72626"
     },
     {
-      "bytes": 6643,
+      "bytes": 6678,
       "path": "lib/submitted-messages.mjs",
-      "sha256": "5be903c67a5a260df793b65f387d41c362bd143bedb2f7e874e932f754e68207"
+      "sha256": "4f6f786abd7529279f54ba7fcabea978e2f730fcca88d93fe716dfa31b9737ea"
     },
     {
-      "bytes": 17693,
+      "bytes": 20145,
       "path": "lib/tasks.mjs",
-      "sha256": "79f90cb2101912e0216451ccfc17fa9f1cea85a171845edeaab0d2c7cdcfdb0e"
+      "sha256": "5be7e642971e63efd0055c4542ccf0f94fe525ec740cb54981503619285f9134"
     },
     {
       "bytes": 15907,
@@ -127,14 +127,39 @@
       "sha256": "e70a38eae681da30a61ec6ff5fff10d9d2aa02e573e3706def3e251c85526a27"
     },
     {
-      "bytes": 578,
+      "bytes": 603,
       "path": "package.json",
-      "sha256": "0ddda2dfe422afa6acec44cf01978d97db717ff60a5877997f1aa992b0485e4b"
+      "sha256": "27857d85346d81a7d72bbd1ef41bd98d56a48beafc6c8502e3ec94a39e22d6ce"
     },
     {
-      "bytes": 74102,
+      "bytes": 40084,
+      "path": "public/app-icon-192.png",
+      "sha256": "972c63c1c18d3adc251bbd75103e51e238aec92ae0f72eddb1821f79242989b7"
+    },
+    {
+      "bytes": 282093,
+      "path": "public/app-icon-512.png",
+      "sha256": "84197a8c5a8baab74f4a42c7e09cd955bc864e87f360456ca2de37c3091f09f9"
+    },
+    {
+      "bytes": 19033,
+      "path": "public/app-icon.png",
+      "sha256": "ae7ffc0a72459a8c57518c5b060b9153760d5c43822426a9af09af3dadde2f96"
+    },
+    {
+      "bytes": 88777,
       "path": "public/app.js",
-      "sha256": "abf7a677ef0ca8690d85b0d15a2c48bc308b2347eacd9d54ca2b042948248c67"
+      "sha256": "f44ef88e12df8ce9bb6e66e8526034f2f144acaab1df381578a3a813382ecabe"
+    },
+    {
+      "bytes": 35362,
+      "path": "public/apple-touch-icon.png",
+      "sha256": "462e3959ce3007fdebe78950ab19271d7072024dc96e173e3542cba08e779de8"
+    },
+    {
+      "bytes": 104164,
+      "path": "public/favicon.ico",
+      "sha256": "0d5065ea2ac100b61d9e88c17badc64ae8f4941899da7af726f0f42d51229580"
     },
     {
       "bytes": 517,
@@ -142,14 +167,14 @@
       "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
     },
     {
-      "bytes": 32282,
+      "bytes": 32845,
       "path": "public/index.html",
-      "sha256": "c4500449703b896f4e23ceb9b3f10359badbae5bdf29ee0ef5d16f22135dea5b"
+      "sha256": "0b77532c27cd17bd7d58d5449e44554af3210c34150456969782d5f92ebb76d3"
     },
     {
-      "bytes": 409,
+      "bytes": 617,
       "path": "public/manifest.webmanifest",
-      "sha256": "05707e1674d43d80729035f57285a2139266d216a17bba2f0eb5d0edd6f8cffb"
+      "sha256": "7e24ee63e003f34cb04f1169789b9218c2c39cb18bdfc61b571d061b5d2195c5"
     },
     {
       "bytes": 17495,
@@ -162,9 +187,9 @@
       "sha256": "59f2304b1a280a66c6c435b7964e4c11ed1e1b78f26af863afbaa42a8a5e931a"
     },
     {
-      "bytes": 39232,
+      "bytes": 39284,
       "path": "public/styles.css",
-      "sha256": "e942eb0455ab0ed7495d188d2f586168d42562c15d31896a082a6db009cbc22e"
+      "sha256": "c49839d582ec3d24ee3f08fdd25e72fb2522dd2cc91315da98ae7691660382b7"
     },
     {
       "bytes": 121660,
@@ -172,9 +197,9 @@
       "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
     },
     {
-      "bytes": 23931,
+      "bytes": 25028,
       "path": "server.mjs",
-      "sha256": "0f657ef7a41bda99492a90a301dccab0448661eaee92db1eb04573488879ea94"
+      "sha256": "3076ebf075f2f108986f6f682f8abb7ba4702358d96e4c7c5348c273a5d9c411"
     },
     {
       "bytes": 6545,
@@ -187,9 +212,9 @@
       "sha256": "4f768804074285e7b7291137a9676a982cf4e8f2588793369c34b95362a7a3c9"
     },
     {
-      "bytes": 20270,
+      "bytes": 28931,
       "path": "test/desktop-tasks.test.mjs",
-      "sha256": "9249ef9f37f8789536b008563d6ee870a217dde00ac9526cfb9d6d697f510ac9"
+      "sha256": "e8707c6d8276e7dabfc1625567603231c0e39968b8b2aaf03dc3ed8ef4b195ea"
     },
     {
       "bytes": 16391,
@@ -212,9 +237,9 @@
       "sha256": "4bb0c11dcbdbd6d44c1e727fcc8d97789a36417709900032628e8771c811cdfa"
     },
     {
-      "bytes": 39949,
+      "bytes": 42282,
       "path": "test/server.test.mjs",
-      "sha256": "633862b7c4e72ca26861c3ba11c8a9b0d764f16c9883b6f4d6688c07a2d2a11d"
+      "sha256": "6c1daca59784006867a2c507b86f0fbc75b77eb8e745508162339fd4a04d825e"
     },
     {
       "bytes": 6172,
@@ -222,9 +247,9 @@
       "sha256": "9731769622dfb6a8c30c9ac29d558bb3b921439137a759e12e2e50d7ae986821"
     },
     {
-      "bytes": 33075,
+      "bytes": 34240,
       "path": "test/tasks.test.mjs",
-      "sha256": "6ee6441a109535fbfa530c43b917bd9734f5f1b8ff385ded025f8668628648b3"
+      "sha256": "ca6ff94fe572bc04990b899670bb3e3bf9b1a25fe130717022029c93ef6a6e9e"
     },
     {
       "bytes": 5001,
@@ -259,8 +284,8 @@
   ],
   "name": "Codex 移动助手",
   "platform": "macOS universal",
-  "releaseNotes": "V1.0.1 重制版（软件版本仍为 1.0.1）\n\n- 同一轮的公开过程说明、命令执行、文件修改和工具记录合并到一个“思考与过程”折叠区域，最终答复单独显示。\n- 展开和收起状态在流式刷新、切换聊天与本标签页刷新后保留，不同轮次独立控制。\n- 助手启动后后台检查更新，之后每 6 小时检查；发现更高版本时显示更新说明，不会因提示而自动下载或安装。\n- 可选择本版本不再提示，直到发现下一个新版本；仍可在“设置 → 更新与关于”查看和手动安装。\n- 原有聊天、发送回执、项目文件、模型选择、手机权限、配对、外观和赞助功能全部保留。\n\n本次保持版本号 1.0.1。已安装旧 1.0.1 的用户需按重制版说明手动合并覆盖，并保留 .runtime 与个人项目；1.0.0 专用版可使用检查更新。",
+  "releaseNotes": "V1.1.0 · 加载优化与新图标\n\n- 优先显示近期用户消息与最终答复，再在后台补齐更早历史和执行详情。\n- 已打开过的聊天使用有界内存缓存，返回时先显示上次内容，再同步最新进展；退出或撤销授权后清空。\n- 折叠过程和工具正文在展开时才生成，减少长执行记录对手机显示的影响；过程数据仍可后台预加载。\n- 只重绘变化的消息，空闲时降低刷新频率，未变化的数据使用版本校验减少传输；后台补齐时保持阅读位置。\n- 更换为作者提供的新图标，应用于网页、手机添加到主屏幕以及 Windows 启动器与托盘。\n- 保留原有文件预览下载、发送回执、模型选择、整轮折叠、手机权限、配对、外观、反馈与赞助。\n- 继续在启动后及每 6 小时检查更新，显示新版说明；可选择本版本不再提示，直到下次更新，自动安装仍默认关闭。\n\nWindows 11、Windows 10、macOS 专用版统一升至 1.1.0。1.0.0 和 1.0.1 专用版可通过原有更新入口升级；更新保留 .runtime、电脑项目与 Codex 聊天。本版未加入 GPT 模式或新的账号登录入口。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
-  "version": "1.0.1"
+  "version": "1.1.0"
 }

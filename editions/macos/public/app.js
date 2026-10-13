@@ -31,6 +31,8 @@
   document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(...icon(node.dataset.icon).childNodes));
 
   const state = {
+    snapshots: new Map(), snapshotChars: 0, renderedRows: new Map(), recentRevision: '', fullRevision: '', desiredDetailsRevision: '', loadedDetailsRevision: '', recentMessages: [], progressive: false,
+    detailBusy: null, detailTimer: null, detailAttempts: 0, lastDetailAt: 0, threadPollTimer: null, listPollTimer: null, listBusy: null, sessionRevision: 0,
     outgoing: new Map(), outgoingSequence: 0, conversationGeneration: 0, readRevision: 0, lastSubmissionWarning: '',
     role: 'loading', csrf: '', bootstrap: null, activeId: null, threads: [], thread: null,
     pairing: null, pairMode: 'lan', pairingBusy: false, pairToken: '', sending: false,
@@ -75,7 +77,7 @@
     const response = await fetch(path, {
       method, headers, credentials: 'same-origin', cache: 'no-store',
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-      signal: AbortSignal.timeout(30000),
+      signal: options.signal ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([options.signal, AbortSignal.timeout(30000)]) : options.signal) : AbortSignal.timeout(30000),
     });
     let data;
     try { data = await response.json(); } catch { data = {}; }
@@ -170,11 +172,13 @@
     state.statusBusy = true;
     try {
       const previousRole = state.role;
+      const previousSession = state.role + ':' + state.csrf;
       const previousAccess = fileAccessKey(state.role, state.bootstrap?.permissions);
       const data = await api('/api/bootstrap');
       state.bootstrap = data;
       state.role = data.role || 'anonymous';
       state.csrf = data.csrfToken || '';
+      if (previousSession !== state.role + ':' + state.csrf && previousRole !== 'loading') clearConversationCache();
       const accessChanged = previousAccess !== fileAccessKey(state.role, data.permissions);
       if (accessChanged) invalidateFileAccess();
       document.dispatchEvent(new CustomEvent('codex:bootstrap', { detail: data }));
@@ -214,19 +218,33 @@
     } finally { state.statusBusy = false; }
   }
 
+  function codexVisible() { return !document.hidden; }
+  function scheduleThreadPoll() {
+    clearTimeout(state.threadPollTimer);
+    if (codexVisible() && state.activeId && ['owner', 'controller'].includes(state.role)) state.threadPollTimer = setTimeout(() => loadThread(), isRunning(state.thread) ? 1500 : 15000);
+  }
+  function scheduleListPoll() {
+    clearTimeout(state.listPollTimer);
+    if (codexVisible() && ['owner', 'controller'].includes(state.role)) state.listPollTimer = setTimeout(loadThreads, state.threads.some(isRunning) ? 5000 : 30000);
+  }
   async function loadThreads() {
-    if (!['owner', 'controller'].includes(state.role)) return;
+    if (!codexVisible() || !['owner', 'controller'].includes(state.role) || state.listBusy) return;
+    const request = { identity: state.role + ':' + state.csrf, revision: state.sessionRevision };
+    const current = () => request.identity === state.role + ':' + state.csrf && request.revision === state.sessionRevision;
+    state.listBusy = request;
     try {
       const data = await api('/api/threads');
+      if (!current()) return;
       state.threads = data.threads || data.data || [];
       const key = JSON.stringify(state.threads.map((t) => [t.id, t.title || t.name || t.preview, t.updatedAt, t.status]));
       if (key === state.lastThreads) return;
       state.lastThreads = key;
       renderThreads();
     } catch (error) {
-      if (error.status === 401 || error.status === 403) await bootstrap();
+      if (!current()) return;
+      if (error.status === 401 || error.status === 403) { clearConversationCache(); await bootstrap(); }
       else if (!state.threads.length) $('thread-list').replaceChildren(node('p', 'list-empty', `任务列表暂不可用：${error.message}`));
-    }
+    } finally { if (state.listBusy === request) state.listBusy = null; scheduleListPoll(); }
   }
   function renderThreads() {
     const list = $('thread-list');
@@ -249,7 +267,11 @@
   }
   function closeSidebar() { $('workspace').classList.remove('sidebar-open'); }
   function resetConversation() {
+    stopConversationReads();
     state.conversationGeneration++;
+    state.renderedRows.clear();
+    state.recentRevision = ''; state.fullRevision = ''; state.desiredDetailsRevision = ''; state.loadedDetailsRevision = ''; state.recentMessages = []; state.progressive = false;
+    state.detailAttempts = 0; state.lastDetailAt = 0;
     showView('chat');
     state.activeId = null;
     state.thread = null;
@@ -277,26 +299,153 @@
     renderThreads();
     closeSidebar();
   }
+  function stopConversationReads() {
+    clearTimeout(state.detailTimer); state.detailTimer = null;
+    clearTimeout(state.threadPollTimer); state.threadPollTimer = null;
+    state.readBusy?.controller?.abort(); state.detailBusy?.controller?.abort();
+    state.readBusy = false; state.detailBusy = null;
+  }
+  function clearConversationCache() {
+    stopConversationReads();
+    state.snapshots.clear(); state.snapshotChars = 0; state.renderedRows.clear();
+    state.sessionRevision++; state.listBusy = null;
+    state.conversationGeneration++; state.readRevision++;
+    state.thread = null; state.activeId = null; state.outgoing.clear(); state.threads = []; state.lastThreads = '';
+    state.recentMessages = []; state.recentRevision = ''; state.fullRevision = ''; state.desiredDetailsRevision = ''; state.loadedDetailsRevision = ''; state.progressive = false;
+    state.shownReady = false; state.lastMessages = ''; state.lastApprovals = '';
+    $('messages').replaceChildren(); $('approvals').replaceChildren(); $('thread-list').replaceChildren();
+  }
+  function rememberSnapshot(data) {
+    const thread = data.thread;
+    if (!thread?.id || !Array.isArray(thread.messages)) return;
+    const chars = thread.messages.reduce((total, message) => total + String(messageText(message)).length + 300, 0);
+    const prior = state.snapshots.get(thread.id);
+    if (prior) { state.snapshotChars -= prior.chars; state.snapshots.delete(thread.id); }
+    if (chars > 2000000) return;
+    state.snapshots.set(thread.id, { data: { ...data, thread: { ...thread, messages: [...thread.messages] } }, chars, recentRevision: state.recentRevision, fullRevision: state.fullRevision, desiredDetailsRevision: state.desiredDetailsRevision, loadedDetailsRevision: state.loadedDetailsRevision, recentMessages: state.recentMessages, progressive: state.progressive });
+    state.snapshotChars += chars;
+    while (state.snapshots.size > 8 || state.snapshotChars > 4000000) {
+      const id = state.snapshots.keys().next().value;
+      state.snapshotChars -= state.snapshots.get(id).chars; state.snapshots.delete(id);
+    }
+  }
+  function messageIdentity(message, index) { return message.id ? `id:${message.id}` : `position:${message.turnId || ''}:${message.role || message.type || ''}:${index}`; }
+  function mergeRecentMessages(base, recent) {
+    const result = base.map((message, index) => ({ key: messageIdentity(message, index), message }));
+    let before = result.length;
+    // Insert newly discovered entries before the next known entry, preserving transcript order.
+    for (let index = recent.length - 1; index >= 0; index--) {
+      const message = recent[index], key = messageIdentity(message, index);
+      const found = result.findIndex(entry => entry.key === key);
+      if (found === -1) { result.splice(before, 0, { key, message }); }
+      else {
+        const prior = result[found].message;
+        result[found].message = message.deferred && !prior.deferred
+          ? { ...prior, ...message, text: messageText(prior), deferred: false }
+          : message;
+        before = found;
+      }
+    }
+    const messages = result.map(entry => entry.message);
+    if (messages.length <= 400) return messages;
+    // Match the server's bounded view: process output cannot evict a question or final answer.
+    const process = message => message.role === 'tool' || message.role === 'assistant' && message.phase === 'commentary';
+    const selected = new Set(messages.filter(message => !process(message)).slice(-400));
+    const remaining = 400 - selected.size;
+    if (remaining > 0) for (const message of messages.filter(process).slice(-remaining)) selected.add(message);
+    return messages.filter(message => selected.has(message));
+  }
   async function openThread(id) {
-    if (!id) return;
+    if (!id || !['owner', 'controller'].includes(state.role)) return;
     resetConversation();
     state.activeId = id;
     hidden('welcome', true);
-    $('messages').append(node('p', 'list-empty', '正在读取任务记录…'));
+    const cached = state.snapshots.get(id);
+    if (cached) {
+      state.snapshots.delete(id); state.snapshots.set(id, cached);
+      for (const key of ['recentRevision', 'fullRevision', 'desiredDetailsRevision', 'loadedDetailsRevision', 'recentMessages', 'progressive']) state[key] = cached[key];
+      state.thread = cached.data.thread;
+      applyThreadView({ ...cached.data, approvals: [] }, true);
+      $('thread-state').textContent = '已保存记录 · 正在同步'; hidden('thread-state', false);
+    } else $('messages').append(node('p', 'list-empty', '正在读取近期消息…'));
     renderThreads();
     await loadThread(true);
   }
+  function readStillCurrent(request) {
+    return request.id === state.activeId && request.generation === state.conversationGeneration && request.revision === state.readRevision && request.identity === state.role + ':' + state.csrf && ['owner', 'controller'].includes(state.role);
+  }
   async function loadThread(forceScroll = false) {
-    if (!state.activeId) return;
+    if (!state.activeId || !codexVisible() || !['owner', 'controller'].includes(state.role)) return;
     const id = state.activeId;
-    const request = { id, generation: state.conversationGeneration, revision: state.readRevision };
+    const request = { id, generation: state.conversationGeneration, revision: state.readRevision, identity: state.role + ':' + state.csrf, controller: new AbortController() };
     if (state.readBusy && state.readBusy.id === id && state.readBusy.generation === request.generation && state.readBusy.revision === request.revision) return;
+    state.readBusy?.controller?.abort();
     state.readBusy = request;
     try {
-      const data = await api(`/api/threads/${encodeURIComponent(id)}`);
-      if (id !== state.activeId || request.generation !== state.conversationGeneration || request.revision !== state.readRevision) return;
-      state.thread = data.thread || data;
-      const thread = state.thread;
+      const since = !forceScroll && state.recentRevision ? '&since=' + encodeURIComponent(state.recentRevision) : '';
+      const data = await api(`/api/threads/${encodeURIComponent(id)}?stage=recent${since}`, { signal: request.controller.signal });
+      if (!readStillCurrent(request)) return;
+      if (data.unchanged) { if (state.progressive) scheduleDetails(); return; }
+      const incoming = data.thread || data;
+      const recent = incoming.loadingStage === 'recent';
+      state.progressive = recent;
+      state.recentRevision = data.revision || incoming.revision || '';
+      state.recentMessages = incoming.messages || data.messages || [];
+      if (recent) {
+        state.desiredDetailsRevision = incoming.detailsRevision || state.recentRevision;
+        state.thread = { ...incoming, messages: mergeRecentMessages(state.thread?.messages || [], state.recentMessages) };
+      } else {
+        state.thread = incoming;
+        state.fullRevision = data.revision || incoming.revision || '';
+        state.loadedDetailsRevision = incoming.detailsRevision || state.fullRevision;
+      }
+      applyThreadView(data, forceScroll);
+      rememberSnapshot({ ...data, thread: state.thread });
+      if (recent) scheduleDetails();
+    } catch (error) {
+      if (!readStillCurrent(request) || error.name === 'AbortError') return;
+      if (forceScroll || (error.status !== 401 && error.status !== 403)) showError(error);
+      if (error.status === 401 || error.status === 403) { clearConversationCache(); await bootstrap(); }
+    } finally { if (state.readBusy === request) state.readBusy = false; scheduleThreadPoll(); }
+  }
+  function scheduleDetails(immediate = false) {
+    if (!state.progressive || !state.activeId || !codexVisible() || !['owner', 'controller'].includes(state.role)) return;
+    if (!immediate && state.loadedDetailsRevision && state.loadedDetailsRevision === state.desiredDetailsRevision) return;
+    if (state.detailBusy) return;
+    if (state.detailTimer && !immediate) return;
+    clearTimeout(state.detailTimer);
+    const expanded = Boolean($('messages').querySelector('.process-disclosure[open]'));
+    const interval = expanded ? 2000 : state.detailAttempts ? Math.min(20000, 3000 * 2 ** Math.min(state.detailAttempts - 1, 3)) : 350;
+    const delay = immediate ? 0 : Math.max(350, interval - (Date.now() - state.lastDetailAt));
+    state.detailTimer = setTimeout(() => { state.detailTimer = null; loadThreadDetails(); }, delay);
+  }
+  async function loadThreadDetails() {
+    if (!state.activeId || !state.progressive || !codexVisible() || state.detailBusy) return;
+    const request = { id: state.activeId, generation: state.conversationGeneration, revision: state.readRevision, identity: state.role + ':' + state.csrf, controller: new AbortController() };
+    state.detailBusy = request; state.lastDetailAt = Date.now(); state.detailAttempts++;
+    try {
+      const since = state.fullRevision ? '&since=' + encodeURIComponent(state.fullRevision) : '';
+      const data = await api(`/api/threads/${encodeURIComponent(request.id)}?stage=full${since}`, { signal: request.controller.signal });
+      if (!readStillCurrent(request)) return;
+      if (!data.unchanged) {
+        const full = data.thread || data;
+        state.fullRevision = data.revision || full.revision || '';
+        state.loadedDetailsRevision = full.detailsRevision || state.fullRevision;
+        // Current recent messages and metadata win over an older background snapshot.
+        state.thread = { ...full, ...state.thread, messages: mergeRecentMessages(full.messages || [], state.recentMessages), historyHasMore: full.historyHasMore };
+        renderConversation(state.thread.messages, isRunning(state.thread));
+        rememberSnapshot({ thread: state.thread, approvals: [] });
+      } else if (data.detailsRevision) state.loadedDetailsRevision = data.detailsRevision;
+    } catch (error) {
+      if (readStillCurrent(request) && error.name !== 'AbortError' && (error.status === 401 || error.status === 403)) { clearConversationCache(); await bootstrap(); }
+    } finally {
+      if (state.detailBusy === request) state.detailBusy = null;
+      if (readStillCurrent(request)) scheduleDetails();
+    }
+  }
+  function applyThreadView(data, forceScroll = false) {
+    const thread = state.thread;
+    const id = state.activeId;
       const running = isRunning(thread);
       showSubmissionWarning(thread);
       if (thread.error && thread.error !== state.lastThreadError) {
@@ -334,11 +483,6 @@
         state.lastApprovals = approvalKey;
         renderApprovals(approvals);
       }
-    } catch (error) {
-      if (id !== state.activeId || request.generation !== state.conversationGeneration || request.revision !== state.readRevision) return;
-      if (forceScroll || (error.status !== 401 && error.status !== 403)) showError(error);
-      if (error.status === 401 || error.status === 403) await bootstrap();
-    } finally { if (state.readBusy === request) state.readBusy = false; }
   }
   function showSubmissionWarning(thread) {
     const warning = thread?.submissionWarning || '';
@@ -357,13 +501,19 @@
       if (synced) { matched.add(synced.id); state.outgoing.delete(key); continue; }
       visible.push({ id: outgoing.id, role: 'user', text: outgoing.text, createdAt: outgoing.createdAt, delivery: outgoing.delivery });
     }
-    const key = JSON.stringify([state.activeId, visible, running]);
-    if (key === state.lastMessages && !forceScroll) return;
+    const key = state.activeId || 'new';
     const scroll = $('conversation-scroll');
     const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 140;
+    const generation = state.conversationGeneration;
+    const anchor = !forceScroll && !nearBottom ? [...$('messages').children].find(child => child.getBoundingClientRect().bottom >= scroll.getBoundingClientRect().top) : null;
+    const anchorTop = anchor?.getBoundingClientRect().top;
     state.lastMessages = key;
     renderMessages(visible, running);
-    if (forceScroll || nearBottom) requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
+    requestAnimationFrame(() => {
+      if (generation !== state.conversationGeneration) return;
+      if (forceScroll || nearBottom) scroll.scrollTop = scroll.scrollHeight;
+      else if (anchor?.isConnected) scroll.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+    });
   }
   function messageText(message) {
     if (typeof message.text === 'string') return message.text;
@@ -535,9 +685,9 @@
       // The bridge only supplies public records. Never render raw internal reasoning if a future source includes it.
       if (/reasoning/i.test(String(item.type || '')) || item.role === 'reasoning' || item.phase === 'analysis') continue;
       const content = messageText(item);
-      if (!content) continue;
+      if (!content && !item.deferred) continue;
       const role = publicMessageRole(item);
-      const record = { item, index, content, role, process: role === 'tool' || role === 'assistant' && item.phase === 'commentary' };
+      const record = { item, index, content: content || '执行记录', role, process: role === 'tool' || role === 'assistant' && item.phase === 'commentary' };
       if (role === 'user') startSegment(['user', item.id || index], item.turnId || null);
       if (record.process) { record.segment = segment; segment.records.push(record); }
       entries.push(record);
@@ -608,39 +758,110 @@
       const label = node('span', 'message-delivery', delivery); label.dataset.status = item.delivery; heading.append(label);
     }
     body.append(heading);
-    const pre = node('pre', 'message-content');
-    renderMessageContent(pre, content, { threadId: state.activeId, cwd: state.thread?.cwd });
+    const context = { threadId: state.activeId, cwd: state.thread?.cwd };
+    const contentNode = () => {
+      const pre = node('pre', 'message-content');
+      if (item.deferred) pre.textContent = '正在加载执行记录…';
+      else renderMessageContent(pre, content, context);
+      return pre;
+    };
     if (role === 'tool') {
       const detail = node('details', 'message-disclosure');
       detail.dataset.messageId = item.id || '';
       retainDisclosure(detail, JSON.stringify([state.activeId, 'tool', item.id ? ['id', item.id] : ['position', item.turnId || '', item.type || role, index]]));
-      detail.append(node('summary', '', item.title || String(content).split('\n')[0].slice(0, 100)), pre);
+      detail.append(node('summary', '', item.title || String(content).split('\n')[0].slice(0, 100)));
+      const reveal = () => {
+        if (detail.open && !detail.querySelector('.message-content')) detail.append(contentNode());
+        if (detail.open && item.deferred) scheduleDetails(true);
+      };
+      detail.addEventListener('toggle', reveal);
+      reveal();
       body.append(detail);
-    } else body.append(pre);
+    } else body.append(contentNode());
     article.append(body);
     return article;
+  }
+  function recordSignature(record) {
+    const { item, content, role } = record;
+    return [content, role, item.phase, item.title, item.createdAt, item.delivery, item.deferred, item.turnId, item.type, state.thread?.cwd];
+  }
+  function recordNode(record, cache) {
+    const key = messageIdentity(record.item, record.index), signature = recordSignature(record);
+    let entry = cache.get(key);
+    if (!entry || !signature.every((value, index) => value === entry.signature[index])) {
+      if (entry) for (const detail of entry.node.querySelectorAll('details[data-disclosure-key]')) state.messageDisclosure.set(detail.dataset.disclosureKey, detail.open);
+      entry = { signature, node: messageArticle(record) };
+      cache.set(key, entry);
+    }
+    return { key, node: entry.node };
+  }
+  function reconcileNodes(container, children) {
+    let next = container.firstChild;
+    for (const child of children) {
+      if (child === next) next = next.nextSibling;
+      else container.insertBefore(child, next);
+    }
+    while (next) { const stale = next; next = next.nextSibling; stale.remove(); }
+  }
+  function renderProcessContent(detail) {
+    const body = detail.querySelector('.process-content'), row = detail.processRow;
+    if (!detail.open) {
+      for (const child of body.querySelectorAll('details[data-disclosure-key]')) state.messageDisclosure.set(child.dataset.disclosureKey, child.open);
+      if (body.childNodes.length) body.replaceChildren();
+      detail.recordNodes.clear();
+      return;
+    }
+    const records = row.records.map(record => recordNode(record, detail.recordNodes));
+    const keep = new Set(records.map(record => record.key));
+    for (const key of detail.recordNodes.keys()) if (!keep.has(key)) detail.recordNodes.delete(key);
+    const children = records.map(record => record.node);
+    if (row.running) {
+      detail.activity ||= node('div', 'turn-activity', 'Codex 正在工作，内容会实时更新…');
+      children.push(detail.activity);
+    }
+    reconcileNodes(body, children);
+  }
+  function processNode(row) {
+    const key = 'process:' + row.key;
+    let entry = state.renderedRows.get(key);
+    if (!entry) {
+      const detail = node('details', 'process-disclosure');
+      retainDisclosure(detail, row.key);
+      detail.recordNodes = new Map();
+      detail.append(node('summary', 'process-summary'), node('div', 'process-content'));
+      detail.addEventListener('toggle', () => {
+        if (!detail.isConnected) return;
+        renderProcessContent(detail);
+        if (detail.open && (detail.processRow.records.some(record => record.item.deferred) || state.loadedDetailsRevision !== state.desiredDetailsRevision)) scheduleDetails(true);
+      });
+      entry = { node: detail, summarySignature: '' };
+      state.renderedRows.set(key, entry);
+    }
+    const detail = entry.node;
+    detail.processRow = row;
+    detail.dataset.turnId = row.turnId || ''; detail.dataset.processKey = row.key;
+    const duration = row.records.map(record => record.item.turnDurationMs).find(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+    const signature = `${row.running}:${duration}`;
+    if (entry.summarySignature !== signature) {
+      const summary = detail.querySelector('.process-summary');
+      summary.replaceChildren(node('span', 'process-summary-title', '思考与过程'));
+      if (row.running) summary.append(node('span', 'process-summary-status', '正在进行'));
+      if (!row.running && duration !== undefined) summary.append(node('span', 'process-summary-duration', duration < 1000 ? `${Math.round(duration)} 毫秒` : `${Math.round(duration / 100) / 10} 秒`));
+      entry.summarySignature = signature;
+    }
+    renderProcessContent(detail);
+    return { key, node: detail };
   }
   function renderMessages(messages, running) {
     const list = $('messages');
     for (const detail of list.querySelectorAll('details[data-disclosure-key]')) state.messageDisclosure.set(detail.dataset.disclosureKey, detail.open);
-    list.replaceChildren();
     const rows = conversationRows(messages, running);
-    for (const row of rows) {
-      if (!row.records) { list.append(messageArticle(row)); continue; }
-      const detail = node('details', 'process-disclosure');
-      detail.dataset.turnId = row.turnId || ''; detail.dataset.processKey = row.key;
-      retainDisclosure(detail, row.key);
-      const summary = node('summary', 'process-summary');
-      summary.append(node('span', 'process-summary-title', '思考与过程'));
-      if (row.running) summary.append(node('span', 'process-summary-status', '正在进行'));
-      const duration = row.records.map(record => record.item.turnDurationMs).find(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
-      if (!row.running && duration !== undefined) summary.append(node('span', 'process-summary-duration', duration < 1000 ? `${Math.round(duration)} 毫秒` : `${Math.round(duration / 100) / 10} 秒`));
-      const body = node('div', 'process-content');
-      for (const record of row.records) body.append(messageArticle(record));
-      if (row.running) body.append(node('div', 'turn-activity', 'Codex 正在工作，内容会实时更新…'));
-      detail.append(summary, body); list.append(detail);
-    }
-    if (!rows.length) list.append(node('p', 'list-empty', '这个任务还没有消息。发送一条指令，继续工作。'));
+    const rendered = rows.map(row => row.records ? processNode(row) : recordNode(row, state.renderedRows));
+    const keep = new Set(rendered.map(row => row.key));
+    for (const key of state.renderedRows.keys()) if (!keep.has(key)) state.renderedRows.delete(key);
+    const children = rendered.map(row => row.node);
+    if (!children.length) children.push(list.querySelector('.list-empty') || node('p', 'list-empty', '这个任务还没有消息。发送一条指令，继续工作。'));
+    reconcileNodes(list, children);
   }
   function renderApprovals(approvals) {
     $('approvals').replaceChildren();
@@ -713,6 +934,7 @@
     if (!prompt || state.sending || state.activeReadOnly) return;
     const threadId = state.activeId;
     const generation = state.conversationGeneration;
+    const session = state.sessionRevision;
     const outgoing = {
       id: `pending-${Date.now()}-${++state.outgoingSequence}`, threadId,
       viewGeneration: generation, text: prompt, createdAt: Date.now(), delivery: 'sending',
@@ -722,6 +944,7 @@
     while (state.outgoing.size > 40) state.outgoing.delete(state.outgoing.keys().next().value);
     const stillHere = () => state.conversationGeneration === generation && state.activeId === threadId;
     state.sending = true;
+    stopConversationReads();
     state.readRevision++;
     $('send').disabled = true;
     hidden('error-banner', true);
@@ -739,6 +962,9 @@
       if (showResponse) {
         state.activeId = returnedId;
         state.thread = data.thread;
+        state.recentMessages = data.thread.messages;
+        state.recentRevision = ''; state.fullRevision = ''; state.loadedDetailsRevision = '';
+        rememberSnapshot({ thread: data.thread, approvals: [] });
         showSubmissionWarning(data.thread);
         state.activeReadOnly = Boolean(data.thread.readOnly || data.thread.controllable === false);
         // Render the accepted POST body immediately; a poll that began before
@@ -755,7 +981,13 @@
         showError(error);
         renderConversation(state.thread?.messages || [], isRunning(state.thread), true);
       }
-    } finally { state.sending = false; $('send').disabled = state.activeReadOnly; }
+    } finally {
+      state.sending = false; $('send').disabled = state.activeReadOnly;
+      if (session === state.sessionRevision && generation === state.conversationGeneration) {
+        scheduleThreadPoll();
+        if (state.progressive) scheduleDetails();
+      }
+    }
   }
   async function stopTurn() {
     if (!state.activeId) return;
@@ -1176,11 +1408,15 @@
   $('prompt').addEventListener('keydown', (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } });
   $('stop-turn').addEventListener('click', stopTurn);
   $('logout').addEventListener('click', async () => {
-    try { await api('/api/logout', { method: 'POST', body: {} }); state.shownReady = false; resetConversation(); await bootstrap(); }
+    try { await api('/api/logout', { method: 'POST', body: {} }); clearConversationCache(); resetConversation(); await bootstrap(); }
     catch (error) { toast(error.message); }
   });
   document.querySelectorAll('[data-prompt]').forEach((button) => button.addEventListener('click', () => { $('prompt').value = button.dataset.prompt; resizePrompt(); $('prompt').focus(); }));
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { bootstrap(); loadThreads(); loadThread(); } });
+  function refreshVisibleConversation() {
+    if (codexVisible()) { loadThreads(); loadThread(); if (state.progressive) scheduleDetails(); }
+    else { stopConversationReads(); clearTimeout(state.listPollTimer); state.listPollTimer = null; }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) bootstrap(); refreshVisibleConversation(); });
   window.addEventListener('online', () => { bootstrap(); loadThread(); });
   window.addEventListener('offline', () => { state.connected = false; updateStatus(); });
 
@@ -1197,8 +1433,7 @@
     }
     await bootstrap();
     setInterval(() => { if (!document.hidden) bootstrap(); }, 3500);
-    setInterval(() => { if (!document.hidden && ['owner', 'controller'].includes(state.role)) { loadThreads(); if ($('pair-dialog').open) loadDevices(); } }, 5000);
-    setInterval(() => { if (!document.hidden && state.activeId && ['owner', 'controller'].includes(state.role)) loadThread(); }, 1500);
+    scheduleListPoll();
     setInterval(() => { if ($('pair-dialog').open) { updateCountdown(); loadDevices(); } }, 2000);
   }
   start();

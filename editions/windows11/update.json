@@ -2,9 +2,9 @@
   "edition": "windows11",
   "files": [
     {
-      "bytes": 38912,
+      "bytes": 143872,
       "path": "Codex-Mobile.exe",
-      "sha256": "3d22f4690f06add848e991897198087b63c696ede46fefb68a8e9dd214c2010e"
+      "sha256": "fd562779c0fa5a57716e53d82eb36455b5e11ace27984cb4b3bc53ae5e7a403c"
     },
     {
       "bytes": 1096,
@@ -17,9 +17,9 @@
       "sha256": "414565396dde7c97f1d83a978f11172c68056e022a72905ac40b35cd3f0d8750"
     },
     {
-      "bytes": 10817,
+      "bytes": 11002,
       "path": "README.md",
-      "sha256": "abae259e522521d48583f67ad3dbd0e8bcb5e91ba535a0b8964b32b4cd2e5a06"
+      "sha256": "52f1643d60f55406e10da8332e687a710758edf4a3b268f35185de361b69dc54"
     },
     {
       "bytes": 106,
@@ -42,9 +42,9 @@
       "sha256": "cb1bea0facc657c0abbac5abd8fc2c53b0fab6a864d9f3e8ae26be59ee06f323"
     },
     {
-      "bytes": 1521,
+      "bytes": 1582,
       "path": "build-launcher.ps1",
-      "sha256": "2e3ad1a537ec009b84a7a3092020ce189334e2719d681425172673043cca9b49"
+      "sha256": "fd89f7e178808592dcb074e14e5f6bc733c86ee1c95d51bb35f1048a95ade0fb"
     },
     {
       "bytes": 6397,
@@ -57,9 +57,9 @@
       "sha256": "ce6c64db7d5426cb6e284ced3f4eeabef4248e45a7a5983a759da226a1014bff"
     },
     {
-      "bytes": 903,
+      "bytes": 1202,
       "path": "docs/UPDATE-NOTES.md",
-      "sha256": "c474ef53e5b99e32cacd67b3df781605f405c56c4511d54001688418950d2dc1"
+      "sha256": "154cfb32a0719419ba74a87f6d0d9f37f2802d9a2910932e7ff1c6b9c8600252"
     },
     {
       "bytes": 2828,
@@ -69,12 +69,12 @@
     {
       "bytes": 257,
       "path": "edition.json",
-      "sha256": "30daaaf5e93044d57a6fc6b3b75b99024346b8059def9747028d8e5a183e2bca"
+      "sha256": "ddc559248621c3b90b76554c1603a5376bb5277ea53e97b1fcb26974c625be34"
     },
     {
-      "bytes": 39476,
+      "bytes": 39534,
       "path": "launcher/Launcher.cs",
-      "sha256": "0787080267376d3c402601ec78c1530cdb98d3bf30e0f3856bc3fd8516c51e7e"
+      "sha256": "0ccfa834a203f7f053173433bcb2969c6e67e2c6fd3d80b00f6702ef1f338c70"
     },
     {
       "bytes": 969,
@@ -92,9 +92,9 @@
       "sha256": "45577207de49b4b16e444d5c82ae60c4cc3136c2ad9b77b469e697d9c616b885"
     },
     {
-      "bytes": 16065,
+      "bytes": 19496,
       "path": "lib/desktop-tasks.mjs",
-      "sha256": "60c44533149581d3719b75815939d7c54b39ef7b3f1b58994c2cd941b26cccfc"
+      "sha256": "c15fa453fa29fefb317e11fcb9f43c0c6c68f2b7e63a4c4bee4f0837fca81fc5"
     },
     {
       "bytes": 21820,
@@ -117,14 +117,14 @@
       "sha256": "31b378b01796e67a30602a926483c89fc50589a4809ec07f05cf848517d72626"
     },
     {
-      "bytes": 6643,
+      "bytes": 6678,
       "path": "lib/submitted-messages.mjs",
-      "sha256": "5be903c67a5a260df793b65f387d41c362bd143bedb2f7e874e932f754e68207"
+      "sha256": "4f6f786abd7529279f54ba7fcabea978e2f730fcca88d93fe716dfa31b9737ea"
     },
     {
-      "bytes": 17693,
+      "bytes": 20145,
       "path": "lib/tasks.mjs",
-      "sha256": "79f90cb2101912e0216451ccfc17fa9f1cea85a171845edeaab0d2c7cdcfdb0e"
+      "sha256": "5be7e642971e63efd0055c4542ccf0f94fe525ec740cb54981503619285f9134"
     },
     {
       "bytes": 14213,
@@ -144,12 +144,37 @@
     {
       "bytes": 579,
       "path": "package.json",
-      "sha256": "f65d517fe5266a410a8188c8f63fc3dfded607e8e2822211bb1161cd4c14bdd8"
+      "sha256": "e98fd5f52c7acbb30555fd47df4cd8a7f84a029aa79e7275e05b71aeebf3f9bd"
     },
     {
-      "bytes": 74102,
+      "bytes": 40084,
+      "path": "public/app-icon-192.png",
+      "sha256": "972c63c1c18d3adc251bbd75103e51e238aec92ae0f72eddb1821f79242989b7"
+    },
+    {
+      "bytes": 282093,
+      "path": "public/app-icon-512.png",
+      "sha256": "84197a8c5a8baab74f4a42c7e09cd955bc864e87f360456ca2de37c3091f09f9"
+    },
+    {
+      "bytes": 19033,
+      "path": "public/app-icon.png",
+      "sha256": "ae7ffc0a72459a8c57518c5b060b9153760d5c43822426a9af09af3dadde2f96"
+    },
+    {
+      "bytes": 88777,
       "path": "public/app.js",
-      "sha256": "abf7a677ef0ca8690d85b0d15a2c48bc308b2347eacd9d54ca2b042948248c67"
+      "sha256": "f44ef88e12df8ce9bb6e66e8526034f2f144acaab1df381578a3a813382ecabe"
+    },
+    {
+      "bytes": 35362,
+      "path": "public/apple-touch-icon.png",
+      "sha256": "462e3959ce3007fdebe78950ab19271d7072024dc96e173e3542cba08e779de8"
+    },
+    {
+      "bytes": 104164,
+      "path": "public/favicon.ico",
+      "sha256": "0d5065ea2ac100b61d9e88c17badc64ae8f4941899da7af726f0f42d51229580"
     },
     {
       "bytes": 517,
@@ -157,14 +182,14 @@
       "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
     },
     {
-      "bytes": 32314,
+      "bytes": 32877,
       "path": "public/index.html",
-      "sha256": "8797e68e140773c35e70cf993a73cda572606c123d0e41875026b390cd045b43"
+      "sha256": "5ed053b76ee826dd2e2a8a8b24c828aa506a61efbb64c8f9b0c0b185c24b7c68"
     },
     {
-      "bytes": 421,
+      "bytes": 629,
       "path": "public/manifest.webmanifest",
-      "sha256": "83a91372fcd086fecc31e981e95e3e7c6a3172851d0391344297b381731b13b7"
+      "sha256": "b74030f23d4c4e47a471c2514b9146ad405c6922ea35b9f857700df2715c2044"
     },
     {
       "bytes": 17495,
@@ -177,9 +202,9 @@
       "sha256": "582f7d6d4c0212f71cc9ba34b960a29519d19f100b957262da9d18ff20d25d62"
     },
     {
-      "bytes": 39232,
+      "bytes": 39284,
       "path": "public/styles.css",
-      "sha256": "e942eb0455ab0ed7495d188d2f586168d42562c15d31896a082a6db009cbc22e"
+      "sha256": "c49839d582ec3d24ee3f08fdd25e72fb2522dd2cc91315da98ae7691660382b7"
     },
     {
       "bytes": 121660,
@@ -187,9 +212,9 @@
       "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
     },
     {
-      "bytes": 23908,
+      "bytes": 25005,
       "path": "server.mjs",
-      "sha256": "575a87e13107bb2a5dc72d20b531dfb0f9c568e27d65833365e293dcddb2c4e0"
+      "sha256": "d4d41cd460dedbe9f1a184dc4632ca1be396fd9183357d5dcbb8eefa6bc1a0b2"
     },
     {
       "bytes": 6551,
@@ -202,9 +227,9 @@
       "sha256": "501155cc164e2d5d51a5a8cc9fb1e3e430f00ebe4dccb2b88da909a28f175029"
     },
     {
-      "bytes": 20276,
+      "bytes": 28937,
       "path": "test/desktop-tasks.test.mjs",
-      "sha256": "1beca96730f6a42d6f60763bb4860ce804995f0720d771a77140ce26c7180001"
+      "sha256": "e4ba640e09c03aa7fbb33ddf92386ea9a9d108ce79b7fa847a6dcf75aeb089b8"
     },
     {
       "bytes": 16391,
@@ -222,9 +247,9 @@
       "sha256": "4bb0c11dcbdbd6d44c1e727fcc8d97789a36417709900032628e8771c811cdfa"
     },
     {
-      "bytes": 39949,
+      "bytes": 42282,
       "path": "test/server.test.mjs",
-      "sha256": "633862b7c4e72ca26861c3ba11c8a9b0d764f16c9883b6f4d6688c07a2d2a11d"
+      "sha256": "6c1daca59784006867a2c507b86f0fbc75b77eb8e745508162339fd4a04d825e"
     },
     {
       "bytes": 6178,
@@ -232,9 +257,9 @@
       "sha256": "12457a0cf8bfbbb9b14fd43a00175d384fce635c2dd8df49dd6dec752ccbf0de"
     },
     {
-      "bytes": 33081,
+      "bytes": 34246,
       "path": "test/tasks.test.mjs",
-      "sha256": "f00b283b614cf0d6329663a394e0de3314138884a20b11acfeb033e54bce26d9"
+      "sha256": "725780a3ff8987f2343e46226d3ed3e890b7da1b160d123064ea22cede1024ab"
     },
     {
       "bytes": 5001,
@@ -269,8 +294,8 @@
   ],
   "name": "Codex 移动助手",
   "platform": "Windows 11 x64",
-  "releaseNotes": "V1.0.1 重制版（软件版本仍为 1.0.1）\n\n- 同一轮的公开过程说明、命令执行、文件修改和工具记录合并到一个“思考与过程”折叠区域，最终答复单独显示。\n- 展开和收起状态在流式刷新、切换聊天与本标签页刷新后保留，不同轮次独立控制。\n- 助手启动后后台检查更新，之后每 6 小时检查；发现更高版本时显示更新说明，不会因提示而自动下载或安装。\n- 可选择本版本不再提示，直到发现下一个新版本；仍可在“设置 → 更新与关于”查看和手动安装。\n- 原有聊天、发送回执、项目文件、模型选择、手机权限、配对、外观和赞助功能全部保留。\n\n本次保持版本号 1.0.1。已安装旧 1.0.1 的用户需按重制版说明手动合并覆盖，并保留 .runtime 与个人项目；1.0.0 专用版可使用检查更新。",
+  "releaseNotes": "V1.1.0 · 加载优化与新图标\n\n- 优先显示近期用户消息与最终答复，再在后台补齐更早历史和执行详情。\n- 已打开过的聊天使用有界内存缓存，返回时先显示上次内容，再同步最新进展；退出或撤销授权后清空。\n- 折叠过程和工具正文在展开时才生成，减少长执行记录对手机显示的影响；过程数据仍可后台预加载。\n- 只重绘变化的消息，空闲时降低刷新频率，未变化的数据使用版本校验减少传输；后台补齐时保持阅读位置。\n- 更换为作者提供的新图标，应用于网页、手机添加到主屏幕以及 Windows 启动器与托盘。\n- 保留原有文件预览下载、发送回执、模型选择、整轮折叠、手机权限、配对、外观、反馈与赞助。\n- 继续在启动后及每 6 小时检查更新，显示新版说明；可选择本版本不再提示，直到下次更新，自动安装仍默认关闭。\n\nWindows 11、Windows 10、macOS 专用版统一升至 1.1.0。1.0.0 和 1.0.1 专用版可通过原有更新入口升级；更新保留 .runtime、电脑项目与 Codex 聊天。本版未加入 GPT 模式或新的账号登录入口。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
-  "version": "1.0.1"
+  "version": "1.1.0"
 }

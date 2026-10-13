@@ -11,8 +11,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.resolve(process.env.MOBILE_UI_OUTPUT || path.join(os.tmpdir(), 'codex-permissions-' + Date.now()));
 const editions = (process.env.MOBILE_UI_EDITIONS || 'windows10,windows11,macos').split(',');
 assert.ok(editions.every(id => ['windows10', 'windows11', 'macos'].includes(id)));
+const versions = Object.fromEntries(await Promise.all(editions.map(async id => [id, JSON.parse(await readFile(path.join(root, 'editions', id, 'package.json'), 'utf8')).version])));
+const futureVersion = (version, offset) => { const [major, minor, patch] = version.split('.').map(Number); return `${major}.${minor}.${patch + offset}`; };
 await mkdir(output, { recursive: true });
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const primary = 'a'.repeat(24), extra = 'b'.repeat(24);
 let edition, fixture;
@@ -23,7 +25,7 @@ const json = (response, value, status = 200) => { response.writeHead(status, { '
 function makeFixture(id, role) {
   const cwd = id === 'macos' ? '/Users/mock/工作项目' : 'C:/Mock/工作项目';
   const drive = id === 'macos' ? '/Volumes/Research' : 'D:/';
-  return { role, version: '1.0.1', permissions: { allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false }, cwd, drive, folder: drive.replace(/\/$/, '') + '/研究 项目', added: false, approval: true, running: true, failPermission: false, failStop: false, posts: [] };
+  return { role, version: versions[id], permissions: { allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false }, cwd, drive, folder: drive.replace(/\/$/, '') + '/研究 项目', added: false, approval: true, running: true, failPermission: false, failStop: false, posts: [] };
 }
 function permissions() { return { ...fixture.permissions, canManage: fixture.role === 'owner' }; }
 function thread(native) { return { id: native ? 'native' : 'companion', title: native ? '原生桌面聊天' : '手机助手任务', cwd: fixture.cwd, status: fixture.running ? 'running' : 'idle', native, readOnly: false, capabilities: { send: true, stop: !native, approvals: !native }, messages: [{ id: 'answer', role: 'assistant', phase: 'commentary', text: '正在处理受支持任务。' }] }; }
@@ -104,8 +106,9 @@ try {
     await page.waitForSelector('#workspace:not(.hidden)');
     await page.waitForFunction(() => document.querySelector('#release-notice').open);
     assert.match(await page.locator('#release-notice-title').textContent(), /欢迎使用/);
-    assert.match(await page.locator('#release-notice-version').textContent(), /1\.0\.1/);
-    assert.equal(await page.locator('#release-notice li').count(), 6);
+    assert.ok((await page.locator('#release-notice-version').textContent()).includes(versions[id]));
+    const releaseText = await page.locator('#release-notice').textContent();
+    for (const feature of ['结果先显示', '长对话更轻快', '新的应用图标', '过程可折叠', '发出的指令看得见', '文件直接打开', '项目与模型更清晰', '手机权限默认关闭', '新版本提醒']) assert.ok(releaseText.includes(feature), `Missing release feature: ${feature}`);
     await assertLayout(page, '#release-notice');
     await page.screenshot({ path: path.join(output, id + '-' + role + '-notice.png'), fullPage: true });
     await page.locator('#release-notice-done').tap();
@@ -139,8 +142,8 @@ try {
     await page.locator('#settings-close').tap(); await page.locator('#permission-guide-close').tap();
     await page.reload(); await page.waitForSelector('#workspace:not(.hidden)'); await page.waitForTimeout(450);
     assert.equal(await page.locator('#release-notice').evaluate(node => node.open), false, 'Same version notice must not repeat'); assert.equal(await page.locator('#permission-guide').isVisible(), false);
-    fixture.version = '1.0.2'; await refresh(page); await page.waitForFunction(() => document.querySelector('#release-notice').open);
-    assert.match(await page.locator('#release-notice-title').textContent(), /V1\.0\.2 更新公告/); await page.locator('#release-notice-done').tap();
+    fixture.version = futureVersion(versions[id], 1); await refresh(page); await page.waitForFunction(() => document.querySelector('#release-notice').open);
+    assert.equal(await page.locator('#release-notice-title').textContent(), `V${futureVersion(versions[id], 1)} 更新公告`); await page.locator('#release-notice-done').tap();
     await page.locator('#settings-open').tap(); await page.locator('#settings-tab-about').tap(); await page.locator('#release-notice-review').tap();
     assert.equal(await page.locator('#release-notice').evaluate(node => node.open), true); await page.locator('#release-notice-close').tap(); await page.locator('#settings-close').tap();
 
@@ -203,13 +206,13 @@ try {
     if (role === 'controller') {
       await page.locator('#settings-open').tap();
       await page.waitForFunction(() => document.querySelector('#update-status').textContent.includes('最新版本'));
-      fixture.version = '1.0.3'; const identityGate = fixture.holdBootstrap = gate();
+      fixture.version = futureVersion(versions[id], 2); const identityGate = fixture.holdBootstrap = gate();
       await page.locator('#settings-tab-permissions').tap(); await identityGate.started;
       fixture.role = 'pending'; await refresh(page);
       await page.waitForFunction(() => document.querySelector('#app').dataset.role === 'pending');
       identityGate.release(); await page.waitForTimeout(100); await page.locator('#settings-close').tap(); await page.waitForTimeout(450);
       assert.equal(await page.locator('#release-notice').evaluate(dialog => dialog.open), false, 'Old settings identity cannot announce a release after pairing is revoked');
-      assert.equal(await page.evaluate(id => localStorage.getItem('codex-mobile.' + id + '.notice.lastVersion'), id), '1.0.2', 'A late response must not mark an unseen release as read');
+      assert.equal(await page.evaluate(id => localStorage.getItem('codex-mobile.' + id + '.notice.lastVersion'), id), futureVersion(versions[id], 1), 'A late response must not mark an unseen release as read');
     }
     await assertLayout(page, '#app'); assert.deepEqual(browserErrors, []);
     results.push({ edition: id, role, width, fontSize: size, permissions: true, standaloneCli: true, ownerIndependent: role === 'owner', stopAcknowledgement: true, nativeNotPromoted: true, directorySelection: true, revocationDropsLateResponses: role === 'controller', permissionReadWriteSerialized: role === 'owner', staleIdentityDiscarded: role === 'controller', versionNoticeOnce: true, manualNotice: true, pairingUnblocked: true, browserErrors });

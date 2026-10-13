@@ -20,8 +20,8 @@ import { createInstaller } from './lib/update-installer.mjs';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const qrcode = require('./vendor/qrcode.cjs');
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
-const ASSETS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/settings.js', '/settings.css', '/support-wechat.jpg', '/icon.svg', '/manifest.webmanifest']);
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
+const ASSETS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/settings.js', '/settings.css', '/support-wechat.jpg', '/icon.svg', '/app-icon.png', '/app-icon-192.png', '/app-icon-512.png', '/apple-touch-icon.png', '/favicon.ico', '/manifest.webmanifest']);
 
 export function lanAddresses(port) {
   return Object.values(os.networkInterfaces()).flat().filter(v => v && v.family === 'IPv4' && !v.internal && !v.address.startsWith('169.254.') && !v.address.startsWith('198.18.') && !v.address.startsWith('198.19.')).map(v => `http://${v.address}:${port}`).sort((a, b) => Number(a.includes('192.168.137.')) - Number(b.includes('192.168.137.')));
@@ -265,7 +265,22 @@ export async function createConsole(options = {}) {
       }
       match = /^\/api\/threads\/([a-zA-Z0-9_-]+)(?:\/(messages|stop|fork))?$/.exec(url.pathname);
       if (match) {
-        if (method === 'GET' && !match[2]) { send(res, 200, await tasks.get(match[1])); return; }
+        if (method === 'GET' && !match[2]) {
+          const stage = url.searchParams.get('stage') || 'full';
+          if (!['recent', 'full'].includes(stage)) throw new AccessError(400, '无效的聊天加载阶段。');
+          const view = await tasks.get(match[1], { stage });
+          // Recheck authorization after slow reads, including revocation while a
+          // background history request was in flight. Validators never grant access.
+          const current = sessions.get(req.headers.cookie, cookieName());
+          authorized(current);
+          if (current.role === 'owner' && !localOwnerRequest(req)) throw new AccessError(401, '当前连接已失效。');
+          const etag = `"${view.revision}"`;
+          res.setHeader('ETag', etag);
+          if (req.headers['if-none-match'] === etag) { res.writeHead(304); res.end(); return; }
+          if (url.searchParams.get('since') === view.revision) send(res, 200, { unchanged: true, revision: view.revision });
+          else send(res, 200, view);
+          return;
+        }
         if (method === 'POST' && match[2]) { const input = await body(req); if (match[2] === 'stop') permissions.require(session.role, 'allowMobileStop'); send(res, 200, match[2] === 'stop' ? await tasks.stop(match[1]) : match[2] === 'fork' ? await tasks.fork(match[1], input) : await tasks.send(match[1], input.prompt, { model: input.model, effort: input.effort })); return; }
       }
       match = /^\/api\/approvals\/([a-f0-9]+)$/.exec(url.pathname);

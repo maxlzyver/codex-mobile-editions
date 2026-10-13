@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { Tasks } from '../lib/tasks.mjs';
+import { Tasks, stageView } from '../lib/tasks.mjs';
 
 const copy = value => structuredClone(value);
 const catalog = [
@@ -16,6 +16,23 @@ function deferred() {
   const promise = new Promise((a, b) => { resolve = a; reject = b; });
   return { promise, resolve, reject };
 }
+
+test('recent views retain the latest ten turns with complete primary messages and a stable validator', () => {
+  const messages = Array.from({ length: 18 }, (_, i) => [
+    { id: `user-${i}`, turnId: `turn-${i}`, role: 'user', text: `Question ${i}` },
+    { id: `tool-${i}`, turnId: `turn-${i}`, role: 'tool', text: `Command ${i}\nLong output ${i}` },
+    { id: `answer-${i}`, turnId: `turn-${i}`, role: 'assistant', phase: 'final_answer', text: `Complete answer ${i}` },
+  ]).flat();
+  const full = { thread: { id: 'scoped', messages, readAt: 100 }, approvals: [] };
+  const recent = stageView(full, 'recent');
+  assert.equal(recent.thread.messages.length, 30);
+  assert.equal(recent.thread.messages[0].id, 'user-8');
+  assert.equal(recent.thread.messages.at(-1).text, 'Complete answer 17');
+  assert.equal(recent.thread.messages[1].text, 'Command 8');
+  assert.equal(recent.thread.messages[1].deferred, true);
+  assert.equal(stageView({ ...full, thread: { ...full.thread, readAt: 999 } }, 'recent').revision, recent.revision);
+  assert.notEqual(stageView({ ...full, thread: { ...full.thread, id: 'other' } }, 'recent').revision, recent.revision);
+});
 
 class FakeBridge extends EventEmitter {
   constructor() {

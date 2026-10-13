@@ -1,4 +1,4 @@
-# Codex 移动助手 · V1.0.1 专用版
+# Codex 移动助手 · V1.1.0 专用版
 
 作者：[maxlzyver](https://github.com/maxlzyver) · [反馈邮件](mailto:lzyuan666666@gmail.com) · MIT 许可证
 
@@ -14,15 +14,15 @@
 
 ## 下载与首次使用
 
-请从 [V1.0.1 重制版发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.0.1-rebuild.1) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
+请从 [V1.1.0 发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.1.0) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
 
-本次重制保持软件版本 **1.0.1**，改为整轮统一折叠过程和执行记录，保留原 V1.0.1 的全部功能。原发布包已被 GitHub 锁定，因此重制版使用独立发布标签。已装旧 V1.0.1 的用户不会收到同版本更新提示，请按[保留数据换装说明](docs/V1.0.1-REBUILD.md)安装；V1.0.0 仍可从程序内更新。
+当前三版均为 **1.1.0**，包含渐进加载优化和新图标，保留 V1.0.1 全部功能。已安装 1.0.0 / 1.0.1 专用版可通过程序内“检查更新”升级，保留本地配置与项目。本版不加入 GPT 模式或新的账号登录入口。
 
 | 专用版 | 系统要求 | 完整安装包 | 启动入口 |
 | --- | --- | --- | --- |
-| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.0.1-x64.zip | Codex-Mobile.exe |
-| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.0.1-x64.zip | Codex-Mobile.exe |
-| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.0.1-universal.zip | Start.command |
+| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.1.0-x64.zip | Codex-Mobile.exe |
+| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.1.0-x64.zip | Codex-Mobile.exe |
+| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.1.0-universal.zip | Start.command |
 
 完整解压到当前用户可写目录；在电脑安装并登录兼容的 Codex，启动本版助手并选择项目目录。电脑页面点击“连接手机”，手机扫码后由电脑批准。macOS 首次打开未签名脚本，可能需要在 Finder 右键打开并按系统提示批准；本项目不要求关闭系统安全功能。
 
@@ -30,7 +30,15 @@
 
 旧版 **1.2 不会自动降级到新的专用版 1.0**。请退出旧助手，将新完整包解压到新文件夹，重新选择项目并配对手机。电脑项目和 Codex 聊天仍在原位置。
 
-## V1.0.1 更新
+## V1.1.0 更新
+
+- 近期问答与最终结果先显示，历史和执行详情后台补齐，展开过程时优先补载。
+- 已访问聊天先显示有界内存缓存，再刷新；撤销授权会清除缓存。
+- 折叠正文按需生成，只更新变化节点，空闲时减少刷新，未变化时减少传输。
+- 后台插入历史时保留阅读位置，避免跳动。
+- 使用作者提供的新图标，网页、手机主屏幕和 Windows 启动器／托盘保持一致。
+
+## 保留 V1.0.1 功能
 
 - 同一轮的公开过程说明、命令执行、文件修改和工具记录统一放入一个折叠区，默认收起；最终答复与用户指令单独显示，实时刷新和切换聊天保留开关选择。
 - 新版本自动检查与弹窗提醒：电脑和手机可查看新版说明，可选“下次更新前不再提示”，发现下一版才再次提醒；安装仍由电脑管理端控制，自动安装默认关闭。
@@ -70,7 +78,7 @@
 
 ## 运行与验证范围
 
-V1.0.0 基线中，Windows 11 启动器已在开发用 Windows 11 机器检查；Windows 10 启动器已编译并验证系统边界，但尚未在 Windows 10 实机完整运行。macOS 的启动、进程管理、Unix socket 和更新代码独立实现；已在 macOS 15 的 Apple 芯片与 Intel GitHub 运行器分别通过 143 项测试，包含中文路径下的原生进程核验。自动化测试不能替代 Finder、真实 Codex 和手机网络的完整实机验收。V1.0.1 本次回归结果及各次记录见 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)。
+V1.0.0 基线中，Windows 11 启动器已在开发用 Windows 11 机器检查；Windows 10 启动器已编译并验证系统边界，但尚未在 Windows 10 实机完整运行。macOS 的启动、进程管理、Unix socket 和更新代码独立实现；已在 macOS 15 的 Apple 芯片与 Intel GitHub 运行器分别通过 143 项测试，包含中文路径下的原生进程核验。自动化测试不能替代 Finder、真实 Codex 和手机网络的完整实机验收。V1.1.0 本次回归结果及各次记录见 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)。
 
 原桌面连接依赖 Codex 内部接口，可能随其升级变化。局域网需要设备互通；互联网模式使用 Cloudflare Quick Tunnel，地址不固定、流量经过 Cloudflare。电脑需要保持开机、联网且不休眠。
 

@@ -324,3 +324,136 @@ test('native read failures retain cached-only messages even if the CLI reader al
   assert.equal(cachedFallback.thread.control, 'readOnly');
   assert.equal(cachedFallback.thread.capabilities.send, false);
 });
+
+test('recent native results arrive before slow history and full preload shares both reads', { timeout: 3000 }, async () => {
+  const { tasks, companion, native } = fixture();
+  tasks.readCacheMs = 10000;
+  let release, historyReads = 0;
+  const history = new Promise(resolve => { release = resolve; });
+  companion.get = async id => { historyReads++; await history; return { thread: { id, messages: [{ id: 'old', role: 'assistant', text: 'Earlier answer' }] }, approvals: [] }; };
+  try {
+    const recent = await tasks.get('desktop', { stage: 'recent' });
+    assert.equal(recent.thread.loadingStage, 'recent');
+    assert(recent.thread.messages.some(item => item.text === 'Native result'));
+    assert(!recent.thread.messages.some(item => item.id === 'old'));
+    let fullDone = false;
+    const fullPromise = tasks.get('desktop', { stage: 'full' }).then(view => { fullDone = true; return view; });
+    const anotherRecent = await tasks.get('desktop', { stage: 'recent' });
+    assert.equal(fullDone, false);
+    assert.equal(anotherRecent.revision, recent.revision);
+    release();
+    const full = await fullPromise;
+    assert.deepEqual(full.thread.messages.map(item => item.text), ['Earlier answer', 'Native result']);
+    assert.equal(historyReads, 1);
+    assert.equal(native.calls.filter(call => call.tool === 'read_thread').length, 1);
+    const warmed = await tasks.get('desktop', { stage: 'recent' });
+    assert.equal(warmed.thread.detailsRevision, full.thread.detailsRevision);
+    assert.notEqual(warmed.revision, full.revision, 'Stage validators cannot validate another representation');
+  } finally { release(); }
+});
+
+test('recent placeholders preserve order and stable identities while hidden output changes invalidate them', async () => {
+  const { tasks, native } = fixture();
+  await tasks.savedRead('desktop');
+  const data = { thread: local('desktop'), turns: [{ id: 'turn', status: 'completed', items: [
+    { id: 'question', type: 'userMessage', content: [{ type: 'text', text: 'Keep my question' }] },
+    { id: 'comment', type: 'agentMessage', phase: 'commentary', text: 'Visible progress' },
+    { id: 'tool', type: 'commandExecution', command: 'npm test', output: 'First detailed output', status: 'completed' },
+    { id: 'answer', type: 'agentMessage', phase: 'final_answer', text: 'The complete final answer' },
+    { id: 'private', type: 'reasoning', text: 'Never expose this' },
+  ] }] };
+  native.reads.set('desktop', data);
+  const recent = await tasks.get('desktop', { stage: 'recent' });
+  assert.deepEqual(recent.thread.messages.slice(-4).map(item => item.id), ['question', 'comment', 'tool', 'answer']);
+  assert.equal(recent.thread.messages.find(item => item.id === 'tool').text, 'npm test');
+  assert.equal(recent.thread.messages.find(item => item.id === 'tool').deferred, true);
+  assert.equal(recent.thread.messages.find(item => item.id === 'answer').text, 'The complete final answer');
+  assert(!JSON.stringify(recent).includes('First detailed output'));
+  assert(!JSON.stringify(recent).includes('Never expose this'));
+  const unchanged = await tasks.get('desktop', { stage: 'recent' });
+  assert.equal(unchanged.revision, recent.revision, 'Read timestamps alone must not change validators');
+  data.turns[0].items[2].output = 'Second detailed output';
+  const changed = await tasks.get('desktop', { stage: 'recent' });
+  assert.notEqual(changed.revision, recent.revision);
+  assert.notEqual(changed.thread.detailsRevision, recent.thread.detailsRevision);
+  const full = await tasks.get('desktop');
+  assert.equal(changed.thread.detailsRevision, full.thread.detailsRevision);
+  assert(full.thread.messages.find(item => item.id === 'tool').text.includes('Second detailed output'));
+});
+
+test('an execution-heavy native turn cannot evict its question or complete final answer', async () => {
+  const { tasks, native } = fixture();
+  const finalText = 'Complete answer '.repeat(4000);
+  native.reads.set('desktop', { thread: local('desktop'), turns: [{ id: 'long', status: 'completed', items: [
+    { id: 'question', type: 'userMessage', content: [{ type: 'text', text: 'The original request' }] },
+    { id: 'answer', type: 'agentMessage', phase: 'final_answer', text: finalText },
+    ...Array.from({ length: 600 }, (_, index) => ({ id: `tool-${index}`, type: 'commandExecution', command: 'step', output: `log ${index}` })),
+  ] }] });
+  // An accepted phone message is overlaid after native truncation; the overlay
+  // must apply the same priority policy instead of slicing the old question off.
+  tasks.submitted.accept(tasks.submitted.begin('desktop', 'A later phone instruction', [{ id: 'answer', role: 'assistant', text: finalText }]), 'next');
+  for (const stage of ['recent', 'full']) {
+    const view = await tasks.get('desktop', { stage });
+    assert(view.thread.messages.length <= 400);
+    assert.equal(view.thread.messages.find(item => item.id === 'question').text, 'The original request');
+    assert.equal(view.thread.messages.find(item => item.id === 'answer').text, finalText);
+    assert(view.thread.messages.findIndex(item => item.id === 'question') < view.thread.messages.findIndex(item => item.id === 'answer'));
+  }
+});
+
+test('read-only fallback never replaces a complete native answer with older cached history', async () => {
+  const { tasks, companion, native } = fixture();
+  companion.get = async id => ({ thread: { id, updatedAt: 1600000000000, messages: [{ id: 'native-message', role: 'assistant', text: 'Old partial saved answer' }] }, approvals: [] });
+  assert.equal((await tasks.get('desktop')).thread.messages[0].text, 'Native result');
+  native.failRead = true;
+  const fallback = await tasks.get('desktop', { stage: 'recent' });
+  assert.equal(fallback.thread.messages[0].text, 'Native result');
+  assert.equal(fallback.thread.readOnly, true);
+  assert.equal(fallback.thread.capabilities.send, false);
+  assert(fallback.thread.nativeError);
+  // A genuinely later disk transcript is still usable while native is offline.
+  tasks.savedHistory.clear();
+  companion.get = async id => ({ thread: { id, updatedAt: 1800000000000, status: 'idle', messages: [{ id: 'native-message', role: 'assistant', text: 'Later saved completion' }] }, approvals: [] });
+  assert.equal((await tasks.get('desktop')).thread.messages[0].text, 'Later saved completion');
+});
+
+test('a full read waiting on history adopts the newer native snapshot before caching or returning', { timeout: 3000 }, async () => {
+  const { tasks, companion, native } = fixture();
+  let release;
+  const blocked = new Promise(resolve => { release = resolve; });
+  companion.get = async id => { await blocked; return { thread: { id, messages: [] }, approvals: [] }; };
+  const earlier = tasks.get('desktop');
+  try {
+    await new Promise(resolve => setImmediate(resolve));
+    native.reads.set('desktop', { thread: local('desktop'), turns: [{ id: 'turn', items: [{ id: 'native-message', type: 'agentMessage', text: 'New complete answer' }] }] });
+    assert.equal((await tasks.get('desktop', { stage: 'recent' })).thread.messages[0].text, 'New complete answer');
+    release();
+    assert.equal((await earlier).thread.messages[0].text, 'New complete answer');
+    assert.equal(tasks.nativeCache.get('desktop').thread.messages[0].text, 'New complete answer');
+    native.failRead = true;
+    assert.equal((await tasks.get('desktop', { stage: 'recent' })).thread.messages[0].text, 'New complete answer');
+  } finally { release(); }
+});
+
+test('a delayed native read cannot overwrite a newer forced refresh in the shared caches', { timeout: 3000 }, async () => {
+  const { tasks, native } = fixture();
+  let release, entered;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const original = native.callReadOnly.bind(native);
+  let first = true;
+  native.callReadOnly = async (...args) => {
+    const response = await original(...args);
+    if (first) { first = false; entered(); await blocked; }
+    return response;
+  };
+  const earlier = tasks.nativeRead('desktop', false, 'recent');
+  try {
+    await started;
+    native.reads.set('desktop', { thread: local('desktop'), turns: [{ id: 'turn', items: [{ id: 'native-message', type: 'agentMessage', text: 'Newest forced refresh' }] }] });
+    await tasks.nativeRead('desktop', true, 'recent');
+    release(); await earlier;
+    assert.equal(tasks.nativeSnapshots.get('desktop').messages[0].text, 'Newest forced refresh');
+    assert.equal(tasks.nativeCache.get('desktop').thread.messages.find(item => item.id === 'native-message').text, 'Newest forced refresh');
+  } finally { release(); }
+});

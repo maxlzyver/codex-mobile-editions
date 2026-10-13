@@ -1,5 +1,5 @@
 """Pure packaging metadata tests; never builds an archive or touches an installation."""
-import importlib.util
+import importlib.util, json
 from pathlib import Path
 import sys
 import tempfile
@@ -33,11 +33,12 @@ class ReleaseNotesTests(unittest.TestCase):
                     with self.assertRaises(PACKAGE.PackagingError):
                         PACKAGE.read_release_notes(base)
 
-    def test_all_edition_notes_are_scoped_and_state_the_unchanged_version(self):
+    def test_all_edition_notes_are_scoped_and_state_the_current_version(self):
         for edition in PACKAGE.EDITIONS:
             with self.subTest(edition=edition):
                 notes = PACKAGE.read_release_notes(PACKAGE.ROOT / "editions" / edition)
-                self.assertIn("1.0.1", notes)
+                version = json.loads((PACKAGE.ROOT / "editions" / edition / "edition.json").read_text(encoding="utf-8"))["version"]
+                self.assertIn(version, notes)
                 self.assertIn("每 6 小时", notes)
                 self.assertIn("本版本不再提示", notes)
 

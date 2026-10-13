@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const editions = process.argv.slice(2).length ? process.argv.slice(2) : ['windows11', 'windows10', 'macos'];
+const editions = process.argv.slice(2).length ? process.argv.slice(2) : (process.env.MOBILE_UI_EDITIONS || 'windows11,windows10,macos').split(',');
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
 const clone = value => structuredClone(value);
 const gate = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
@@ -17,6 +17,7 @@ try {
   for (const edition of editions) {
     assert(['windows11', 'windows10', 'macos'].includes(edition));
     const directory = path.join(root, 'editions', edition);
+    const version = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8')).version;
     let posts = 0, nextPost, pendingPost, holdRead = false, staleRead, readGate;
     const threads = new Map(['a', 'b'].map(id => [id, { id, title: `聊天 ${id}`, status: 'idle', readOnly: false, native: true, capabilities: { stop: false }, messages: id === 'a' ? [{ id: 'old-user', role: 'user', text: '重复检查' }, { id: 'answer', role: 'assistant', phase: 'final_answer', text: '上一次结果' }] : [] }]));
     const view = id => ({ thread: clone(threads.get(id)), approvals: [] });
@@ -26,7 +27,7 @@ try {
         if (pathname === '/api/bootstrap') return json(res, { role: 'controller', csrfToken: 'mock', status: { codex: 'connected', mode: 'standalone' }, desktop: { connected: true } });
         if (pathname === '/api/models') return json(res, { models: [] });
         if (pathname === '/api/projects') return json(res, { projects: [] });
-        if (pathname === '/api/updates') return json(res, { status: 'upToDate', currentVersion: '1.0.1' });
+        if (pathname === '/api/updates') return json(res, { status: 'upToDate', currentVersion: version });
         if (pathname === '/api/threads' && req.method === 'GET') return json(res, { threads: [...threads.values()] });
         if (pathname.startsWith('/api/threads/') && req.method === 'GET') {
           const id = decodeURIComponent(pathname.split('/')[3]);
@@ -51,16 +52,16 @@ try {
         const name = pathname === '/' ? 'index.html' : pathname.slice(1);
         assert(!name.includes('..'));
         const bytes = await readFile(path.join(directory, 'public', name));
-        const type = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' }[path.extname(name)] || 'application/octet-stream';
+        const type = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' }[path.extname(name)] || 'application/octet-stream';
         res.writeHead(200, { 'Content-Type': type, 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" }); res.end(bytes);
       } catch (error) { json(res, { error: error.message }, 500); }
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-    await context.addInitScript(id => {
-      localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', '1.0.1');
+    await context.addInitScript(({ id, version }) => {
+      localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', version);
       localStorage.setItem('codex-mobile.' + id + '.permissions-guide-dismissed.v1', 'true');
-    }, edition);
+    }, { id: edition, version });
     const page = await context.newPage(); const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     const eventually = async (condition, label) => {
@@ -76,7 +77,8 @@ try {
     const begin = async (prompt, failure = 0, warning = '') => {
       const scenario = { gate: gate(), failure, warning }; nextPost = scenario; pendingPost = null;
       await page.locator('#prompt').fill(prompt); await page.locator('#send').tap();
-      await eventually(() => pendingPost !== null, 'POST request');
+      try { await eventually(() => pendingPost !== null, 'POST request'); }
+      catch (error) { console.error('Send fixture diagnostic:', { edition, errors, banner: await page.locator('#error-banner').textContent(), disabled: await page.locator('#send').isDisabled() }); throw error; }
       await page.locator('.message-delivery[data-status="sending"]').waitFor();
       return { ...pendingPost, release: () => scenario.gate.resolve() };
     };
@@ -89,6 +91,7 @@ try {
       assert.equal(posts, 1);
       await page.locator('#prompt').fill('下一条草稿不能被清空');
       readGate = gate(); staleRead = false; holdRead = true;
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
       await eventually(() => staleRead, 'hold a poll started before POST completes');
       first.release();
       await page.locator('.message-delivery[data-status="sent"]').waitFor();
@@ -112,7 +115,9 @@ try {
       assert.equal(await page.locator('#thread-title').textContent(), '聊天 b');
       assert.equal(await page.locator('#prompt').inputValue(), '聊天 b 的草稿');
       assert.equal(await userCount('只发给聊天 a'), 0);
-      await open('a'); assert.equal(await userCount('只发给聊天 a'), 1);
+      await open('a');
+      await eventually(async () => await userCount('只发给聊天 a') === 1, 'cached chat refresh includes accepted message');
+      assert.equal(await userCount('只发给聊天 a'), 1);
 
       const failed = await begin('明确失败的指令', 409); failed.release();
       await page.locator('.message-delivery[data-status="failed"]').waitFor();
@@ -122,6 +127,7 @@ try {
       await page.locator('.message-delivery[data-status="uncertain"]').waitFor();
       const countBeforeRefresh = posts;
       threads.get('a').messages.push({ id: 'late-receipt', role: 'user', text: '网络结果未确认', submitted: true, delivery: 'sent' });
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
       await eventually(async () => await page.locator('.message-delivery[data-status="uncertain"]').count() === 0, 'later confirmed read resolves ambiguous response');
       assert.equal(await userCount('网络结果未确认'), 1);
       assert.equal(posts, countBeforeRefresh, 'refresh never automatically resends');

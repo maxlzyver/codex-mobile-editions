@@ -17,6 +17,6 @@ if (-not (Test-Path -LiteralPath $launcherSource -PathType Leaf)) { throw 'launc
 & $launcherCompiler /nologo /target:winexe /platform:x64 /optimize+ /utf8output `
     /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll `
     /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll `
-    "/out:$launcherOutput" $launcherSource
+    "/win32icon:$(Join-Path $launcherRoot 'public\favicon.ico')" "/out:$launcherOutput" $launcherSource
 if ($LASTEXITCODE -ne 0) { throw "Launcher compilation failed with exit code $LASTEXITCODE." }
-Write-Host 'Built Codex-Mobile.exe: Codex Mobile Assistant Windows 11 专用版 1.0.1 by maxlzyver, Windows 11 x64. No program was launched.'
+Write-Host 'Built Codex-Mobile.exe: Codex Mobile Assistant Windows 11 专用版 1.1.0 by maxlzyver, Windows 11 x64. No program was launched.'

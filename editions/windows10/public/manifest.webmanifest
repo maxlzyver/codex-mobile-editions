@@ -1,1 +1,25 @@
-{"name":"Codex 移动助手 · Windows 10 专用版","short_name":"Codex 助手 Win10","description":"Windows 10 专用版：在手机浏览器中查看 Codex 聊天、发送指令和下载电脑项目文件","start_url":"/","scope":"/","display":"standalone","background_color":"#f5f7fb","theme_color":"#f5f7fb","lang":"zh-CN","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "name": "Codex 移动助手 · Windows 10 专用版",
+  "short_name": "Codex 助手 Win10",
+  "description": "Windows 10 专用版：在手机浏览器中查看 Codex 聊天、发送指令和下载电脑项目文件",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#f5f7fb",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

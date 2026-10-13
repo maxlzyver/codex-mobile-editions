@@ -28,6 +28,11 @@ jobs:
         run: node tools/test-permissions-ui.mjs
       - name: Verify update alerts, release notes and per-version dismissal
         run: node tools/test-update-notice-ui.mjs
+      - name: Verify recent-first loading, lazy details and stale response races
+        run: |
+          for edition in windows10 windows11 macos; do
+            MOBILE_UI_EDITION="$edition" node tools/test-progressive-ui.mjs
+          done
   verify:
     name: ${{ matrix.edition }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

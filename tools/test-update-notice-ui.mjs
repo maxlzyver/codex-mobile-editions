@@ -12,8 +12,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.resolve(process.env.MOBILE_UI_OUTPUT || path.join(os.tmpdir(), 'codex-update-notice-' + Date.now()));
 const editions = (process.env.MOBILE_UI_EDITIONS || 'windows10,windows11,macos').split(',');
 assert.ok(editions.every(id => ['windows10', 'windows11', 'macos'].includes(id)));
+const versions = Object.fromEntries(await Promise.all(editions.map(async id => [id, JSON.parse(await readFile(path.join(root, 'editions', id, 'package.json'), 'utf8')).version])));
+const futureVersion = (version, offset) => { const [major, minor, patch] = version.split('.').map(Number); return `${major}.${minor}.${patch + offset}`; };
 await mkdir(output, { recursive: true });
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const notes = '同一轮过程与执行记录统一折叠。\n文件预览与发送状态继续保留。\n<img src=x onerror="window.__notesExecuted=true"><script>window.__notesExecuted=true</script>';
 const heldGates = new Set();
@@ -26,13 +28,13 @@ async function waitForGate(held) {
 let edition, fixture;
 const errors = [], results = [];
 const json = (response, value, status = 200) => { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); response.end(JSON.stringify(value)); };
-function updateState() { return { status: 'available', hasUpdate: true, currentVersion: '1.0.1', latestVersion: fixture.latest, releaseNotes: notes, autoUpdate: false, releaseUrl: 'https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v' + fixture.latest }; }
+function updateState() { return { status: 'available', hasUpdate: true, currentVersion: versions[edition], latestVersion: fixture.latest, releaseNotes: notes, autoUpdate: false, releaseUrl: 'https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v' + fixture.latest }; }
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
   try {
     if (url.pathname.startsWith('/api/')) {
       fixture.calls.push({ path: url.pathname, method: request.method, role: fixture.role });
-      if (url.pathname === '/api/bootstrap') return json(response, { role: fixture.role, csrfToken: 'mock-csrf', app: { version: '1.0.1' }, status: { codex: 'connected', mode: 'standalone' }, permissions: { canManage: fixture.role === 'owner', allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false } });
+      if (url.pathname === '/api/bootstrap') return json(response, { role: fixture.role, csrfToken: 'mock-csrf', app: { version: versions[edition] }, status: { codex: 'connected', mode: 'standalone' }, permissions: { canManage: fixture.role === 'owner', allowMobileApprovals: false, allowMobileStop: false, allowOtherFiles: false } });
       if (url.pathname === '/api/threads') return json(response, { threads: [] });
       if (url.pathname === '/api/models') return json(response, { models: [] });
       if (url.pathname === '/api/projects') return json(response, { projects: [] });
@@ -69,16 +71,17 @@ async function layout(page) {
 }
 async function createContext(id, width) {
   const context = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
-  await context.addInitScript(({ id, size }) => {
+  await context.addInitScript(({ id, size, version }) => {
     localStorage.setItem('codex-mobile.' + id + '.appearance.v1', JSON.stringify({ theme: 'blue', font: 'system', size }));
-    localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', '1.0.1');
+    localStorage.setItem('codex-mobile.' + id + '.notice.lastVersion', version);
     localStorage.setItem('codex-mobile.' + id + '.permissions-guide-dismissed.v1', 'true');
-  }, { id, size: width === 320 ? 22 : 16 });
+  }, { id, size: width === 320 ? 22 : 16, version: versions[id] });
   return context;
 }
 try {
   for (const id of editions) for (const role of ['owner', 'controller']) {
-    edition = id; fixture = { role: role === 'controller' ? 'pending' : role, latest: '1.0.2', calls: [] };
+    const nextVersion = futureVersion(versions[id], 1), secondVersion = futureVersion(versions[id], 2), thirdVersion = futureVersion(versions[id], 3);
+    edition = id; fixture = { role: role === 'controller' ? 'pending' : role, latest: nextVersion, calls: [] };
     const width = role === 'controller' ? 320 : 390;
     const context = await createContext(id, width), page = await context.newPage(), pageErrors = [];
     page.on('pageerror', error => pageErrors.push(error.message));
@@ -90,7 +93,7 @@ try {
       fixture.role = role; await refresh(page);
     }
     await page.waitForFunction(() => document.querySelector('#update-notice').open);
-    assert.match(await page.locator('#update-notice-version').textContent(), /1\.0\.2/);
+    assert.ok((await page.locator('#update-notice-version').textContent()).includes(nextVersion));
     assert.equal(await page.locator('#update-notice-notes').textContent(), notes);
     assert.equal(await page.locator('#update-notice-notes img,#update-notice-notes script').count(), 0);
     assert.equal(await page.evaluate(() => window.__notesExecuted), undefined);
@@ -101,23 +104,23 @@ try {
     await refresh(page); await page.waitForTimeout(500); assert.equal(await noticeOpen(page), false, 'Later suppresses repeated reminders during this page session');
     fixture.phase = 'reload after later'; await page.reload(); await page.waitForFunction(() => document.querySelector('#update-notice').open);
     await page.locator('#update-notice-skip').check(); await page.locator('#update-notice-later').tap();
-    await page.waitForFunction(key => localStorage.getItem(key) === '1.0.2', skipKey);
-    assert.equal(await page.evaluate(key => localStorage.getItem(key), skipKey), '1.0.2');
+    await page.waitForFunction(({ key, version }) => localStorage.getItem(key) === version, { key: skipKey, version: nextVersion });
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), skipKey), nextVersion);
     fixture.phase = 'reload with explicit skip'; const beforeReload = fixture.calls.filter(call => call.path === '/api/updates').length;
     const updateRead = page.waitForResponse(response => new URL(response.url()).pathname === '/api/updates');
     await page.reload(); await page.waitForFunction(() => document.querySelector('#workspace:not(.hidden)')); await updateRead;
     await page.waitForTimeout(100); assert.ok(fixture.calls.filter(call => call.path === '/api/updates').length > beforeReload);
     assert.equal(await noticeOpen(page), false, 'Explicitly skipped version stays suppressed across reloads');
 
-    fixture.phase = 'new version behind settings'; await page.locator('#settings-open').tap(); fixture.latest = '1.0.3'; await refresh(page); await page.waitForTimeout(500);
+    fixture.phase = 'new version behind settings'; await page.locator('#settings-open').tap(); fixture.latest = secondVersion; await refresh(page); await page.waitForTimeout(500);
     assert.equal(await noticeOpen(page), false, 'Update reminder must not cover an existing settings dialog');
     await page.locator('#settings-close').tap(); await refresh(page);
     await page.waitForFunction(() => document.querySelector('#update-notice').open);
-    assert.match(await page.locator('#update-notice-version').textContent(), /1\.0\.3/, 'A newer version bypasses the old skip choice');
+    assert.ok((await page.locator('#update-notice-version').textContent()).includes(secondVersion), 'A newer version bypasses the old skip choice');
     fixture.phase = 'view update'; await page.locator('#update-notice-view').tap();
     await page.waitForFunction(() => document.querySelector('#settings-dialog').open && document.querySelector('#settings-tab-about').getAttribute('aria-selected') === 'true');
     assert.equal(await noticeOpen(page), false);
-    await page.waitForFunction(() => document.querySelector('#update-status').textContent.includes('1.0.3'));
+    await page.waitForFunction(version => document.querySelector('#update-status').textContent.includes(version), secondVersion);
     assert.equal(await page.locator('#update-install').isDisabled(), role !== 'owner');
     assert.equal(await page.locator('#update-check').isDisabled(), role !== 'owner');
     assert.equal(await page.locator('#update-notes-body').textContent(), notes);
@@ -137,7 +140,7 @@ try {
     await page.locator('#settings-close').tap(); await context.close();
 
     // A late update response from an old identity cannot open a popup after pairing is revoked.
-    fixture.phase = 'late old identity'; fixture.role = role; fixture.latest = '1.0.4'; const held = fixture.holdUpdates = gate();
+    fixture.phase = 'late old identity'; fixture.role = role; fixture.latest = thirdVersion; const held = fixture.holdUpdates = gate();
     const staleContext = await createContext(id, width), stalePage = await staleContext.newPage();
     stalePage.on('pageerror', error => pageErrors.push(error.message));
     await stalePage.goto(origin); await waitForGate(held);

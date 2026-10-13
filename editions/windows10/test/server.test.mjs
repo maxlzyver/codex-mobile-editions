@@ -16,6 +16,44 @@ class FakeUpdater {
   close() {}
 }
 
+test('staged thread validators reduce unchanged responses without bypassing authentication or stages', async t => {
+  const f = await fixture(t);
+  const auth = await f.owner();
+  const recent = await f.request('/api/threads/desktop-history?stage=recent', auth);
+  assert.equal(recent.status, 200);
+  assert.equal(recent.body.thread.loadingStage, 'recent');
+  assert.match(recent.body.revision, /^[a-f0-9]{24}$/);
+  assert.equal(recent.headers['cache-control'], 'no-store');
+  const unchanged = await f.request(`/api/threads/desktop-history?stage=recent&since=${recent.body.revision}`, auth);
+  assert.deepEqual(unchanged.body, { unchanged: true, revision: recent.body.revision });
+  assert.equal((await f.request('/api/threads/desktop-history?stage=recent', { ...auth, headers: { 'If-None-Match': recent.headers.etag } })).status, 304);
+  const full = await f.request(`/api/threads/desktop-history?stage=full&since=${recent.body.revision}`, auth);
+  assert.equal(full.status, 200);
+  assert.equal(full.body.thread.loadingStage, 'full');
+  assert.notEqual(full.body.revision, recent.body.revision);
+  assert.equal((await f.request(`/api/threads/desktop-history?stage=recent&since=${recent.body.revision}`)).status, 401);
+  assert.equal((await f.request('/api/threads/desktop-history?stage=wrong', auth)).status, 400);
+});
+
+test('revoking a phone during a pending full-history read prevents the transcript and validator response', async t => {
+  const f = await fixture(t);
+  const owner = await f.owner(); const phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  let release, entered;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const original = f.app.tasks.get.bind(f.app.tasks);
+  f.app.tasks.get = async (...args) => { entered(); await blocked; return original(...args); };
+  const pending = f.request('/api/threads/desktop-history?stage=full', phone);
+  await started;
+  await f.request(`/api/devices/${phone.id}/revoke`, { ...owner, method: 'POST', data: {} });
+  release();
+  const denied = await pending;
+  assert.equal(denied.status, 401);
+  assert(!JSON.stringify(denied.body).includes('A saved result'));
+  assert.equal(denied.headers.etag, undefined);
+});
+
 class FakeBridge extends EventEmitter {
   constructor() { super(); this.state = { connected: true, mode: 'standalone', error: null }; this.calls = []; }
   async start() { return this.state; }

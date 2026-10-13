@@ -4,7 +4,7 @@
 
 ## 目录约定
 
-三个平台分别位于 `editions/windows11`、`editions/windows10`、`editions/macos`。每个目录的 `edition.json` 固定平台身份、更新路径、版本与完整 ZIP 文件名。初始均为 `1.0.0`，当前三版为 `1.0.1`，之后可以独立升版。
+三个平台分别位于 `editions/windows11`、`editions/windows10`、`editions/macos`。每个目录的 `edition.json` 固定平台身份、更新路径、版本与完整 ZIP 文件名。初始均为 `1.0.0`，当前三版为 `1.1.0`，之后可以独立升版。
 
 `update.json` 是打包工具生成的轻量更新清单，必须与同目录程序文件保持一致。不要手工修改哈希，也不要把 ZIP 当作唯一仓库内容。客户端从固定提交下载对应目录，不从 Release 选包。
 
@@ -15,7 +15,7 @@
 3. 准备完整的运行组件。Windows 包需要 `runtime/node.exe` 和 `vendor/cloudflared.exe`；Mac 包需要 `runtime/darwin-arm64/bin/node`、`runtime/darwin-x64/bin/node` 及两种 `vendor/cloudflared-darwin-*`，并保留许可证、来源与校验信息。仓库故意不保存这些大组件，请从已有完整干净安装包或组件官方发布获取，不能复制使用后的 `.runtime`。
 4. 在仓库根运行 `python tools/package-editions.py --dry-run --include-tests` 预览白名单，再运行 `python tools/package-editions.py --build --include-tests` 生成清单与完整 ZIP（默认输出到仓库上一层）；独立发布可加 `--edition windows10` 等参数，然后执行 `python tools/verify-editions.py` 核对三个目录的清单。
 5. 将新版目录及同次生成的 `update.json` 先提交到发布分支，等待 Actions 通过并检查原生测试结果，再将已验证提交合入 `main`，避免自动更新提前获取未验证版本。网页上传时也必须保持 `editions/平台/` 路径；不要创建重复嵌套目录。尽量一次提交全部变动。
-6. 在 GitHub Releases 上传工具输出的完整 ZIP 及 SHA256 校验文件，供首次安装使用。先创建草稿并上传全部附件、核对校验值，最后发布。初始三个版本共用 `v1.0.0` 发布页，原 V1.0.1 为 `v1.0.1`，本次重制使用 `v1.0.1-rebuild.1`；后续独立发布时在标题和附件名中标明系统及版本即可。已被 GitHub 锁定的 Release 不改附件或标签。
+6. 在 GitHub Releases 上传工具输出的完整 ZIP 及 SHA256 校验文件，供首次安装使用。先创建草稿并上传全部附件、核对校验值，最后发布。初始三个版本共用 `v1.0.0` 发布页，原 V1.0.1 为 `v1.0.1`，重制版使用 `v1.0.1-rebuild.1`，当前版本使用 `v1.1.0`；后续独立发布时在标题和附件名中标明系统及版本即可。已被 GitHub 锁定的 Release 不改附件或标签。
 
 V1.0.1 重制是一次保留软件版本号的例外。已装旧 V1.0.1 的更新器不会安装同版本，需按 [换装说明](V1.0.1-REBUILD.md)处理；后续正常发布应提高版本，才能通过自动检查、弹窗提醒和原安装更新流程到达用户。
 
