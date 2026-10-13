@@ -140,7 +140,17 @@ try {
       await page.screenshot({path:path.join(output,`${edition}-${width}.png`),fullPage:true});
       // An old browser's saved acknowledgement must not hide a newer available update.
       fixture.update = {status:'available',hasUpdate:true,currentVersion:version,latestVersion:nextVersion(1),releaseNotes:'新的附件与项目功能 '+attack}; await page.reload(); await page.waitForSelector('#update-notice[open]'); assert.equal(await page.locator('#update-notice-notes script').count(),0);
-      await page.locator('#update-notice-skip').check(); await page.locator('#update-notice-later').tap(); await page.reload(); await page.waitForTimeout(1400); assert.equal(await page.locator('#update-notice').evaluate(el=>el.open),false);
+      const skippedVersion = nextVersion(1), skipKey = `codex-mobile.${edition}.updates.dismissedVersion`;
+      await page.locator('#update-notice-skip').check(); await page.locator('#update-notice-later').tap();
+      // dialog.close() queues its close event; that handler persists the explicit choice.
+      // Verify completion before navigation instead of racing it with a page reload.
+      await page.waitForFunction(({key,version})=>!document.querySelector('#update-notice').open && localStorage.getItem(key)===version,{key:skipKey,version:skippedVersion});
+      assert.equal(await page.evaluate(key=>localStorage.getItem(key),skipKey),skippedVersion);
+      const checkedAfterReload=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/updates' && response.status()===200);
+      await page.reload(); await checkedAfterReload;
+      await page.waitForFunction(value=>document.querySelector('#update-status').textContent.includes(value),skippedVersion);
+      assert.equal(await page.evaluate(key=>localStorage.getItem(key),skipKey),skippedVersion);
+      assert.equal(await page.locator('#update-notice').evaluate(el=>el.open),false,'Explicit skip persists across reload and a fresh update-state response');
       fixture.update.latestVersion=nextVersion(2); await page.reload(); await page.waitForSelector('#update-notice[open]'); await page.locator('#update-notice-later').tap();
       assert.deepEqual(errors,[]); results.push({width,role,passed:true,cases:['native-project-hierarchy','truthful-project-capabilities','safe-markdown-code-table-math','compact-user-bubble','local-drafts-remove-progress','authenticated-binary-upload','attachment-preview-original-download','gpt-existing-chat-send-and-isolation','honest-running-action-capabilities','queued-native-child','startup-update-skip-version','22px-layout','citation-cleanup-preserves-user-code','unknown-size-and-file-type','eight-local-attachment-limit','gpt-history-pagination-preserved','uncertain-send-mode-isolation','cancel-upload-on-mode-switch']});
     } catch(error) { await page.screenshot({path:path.join(output,`${edition}-${width}-failure.png`),fullPage:true}); console.error(JSON.stringify({errors,unexpected,submissions:fixture.submissions.map(x=>x.path),body:(await page.locator('body').textContent()).slice(-2500)})); throw error; }
