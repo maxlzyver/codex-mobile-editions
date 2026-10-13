@@ -43,7 +43,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CODEX_UPDATE_E2E_EDITIONS: ${{ matrix.edition }}
-      CODEX_UPDATE_E2E_OUTPUT: ${{ runner.temp }}/codex-mobile-update-evidence
+      CODEX_UPDATE_E2E_OUTPUT: ${{ github.workspace }}/work/ci-update-evidence
       CODEX_UPDATE_E2E_LEGACY: '0'
     strategy:
       fail-fast: false
