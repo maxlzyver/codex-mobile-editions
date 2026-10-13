@@ -35,6 +35,93 @@ test('staged thread validators reduce unchanged responses without bypassing auth
   assert.equal((await f.request('/api/threads/desktop-history?stage=wrong', auth)).status, 400);
 });
 
+function uploadFile(f, auth = {}, bytes = Buffer.from('测试文件原文'), name = '报告.txt') {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ hostname: '127.0.0.1', port: f.app.port, method: 'POST', path: '/api/attachments', headers: {
+      'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'X-File-Name': encodeURIComponent(name),
+      ...(auth.cookie ? { Cookie: auth.cookie } : {}), ...(auth.csrf ? { 'X-CSRF-Token': auth.csrf } : {}),
+    } }, res => {
+      let raw = ''; res.setEncoding('utf8'); res.on('data', value => { raw += value; });
+      res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(raw) }));
+    });
+    req.on('error', reject); req.end(bytes);
+  });
+}
+
+test('attachment HTTP upload requires pairing and CSRF and original downloads end on revocation', async t => {
+  const f = await fixture(t), owner = await f.owner(), phone = await f.pair(owner);
+  assert.equal((await uploadFile(f)).status, 401);
+  assert.equal((await uploadFile(f, phone)).status, 401);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  assert.equal((await uploadFile(f, { cookie: phone.cookie })).status, 403);
+  const result = await uploadFile(f, phone);
+  assert.equal(result.status, 201);
+  const attachment = result.body.attachment;
+  assert.equal(attachment.name, '报告.txt');
+  assert(!JSON.stringify(attachment).includes(f.runtimeDir));
+  assert.equal((await f.request(attachment.downloadUrl)).status, 401);
+  const download = await f.request(attachment.downloadUrl, phone);
+  assert.equal(download.status, 200); assert.equal(download.body, '测试文件原文');
+  assert.match(download.headers['content-disposition'], /attachment;/);
+  assert.equal(download.headers['x-content-type-options'], 'nosniff');
+  await f.request(`/api/devices/${phone.id}/revoke`, { ...owner, method: 'POST', data: {} });
+  assert.equal((await f.request(attachment.downloadUrl, phone)).status, 401);
+});
+
+test('uploaded attachments become real Codex input and clean user cards without raw envelope', async t => {
+  const f = await fixture(t), owner = await f.owner();
+  const uploaded = await uploadFile(f, owner, Buffer.from('original image'), '原图.png');
+  const attachment = uploaded.body.attachment;
+  let received;
+  f.app.tasks.send = async (id, prompt, options) => {
+    received = { id, prompt, options };
+    return { accepted: true, thread: { id, messages: [{ id: 'new-user', role: 'user', text: prompt }] } };
+  };
+  const sent = await f.request('/api/threads/desktop-history/messages', { ...owner, method: 'POST', data: { prompt: '看看这张图', attachmentIds: [attachment.id] } });
+  assert.equal(sent.status, 200);
+  assert.equal(received.options.localImages.length, 1);
+  assert(received.options.localImages[0].startsWith(f.runtimeDir));
+  assert.match(received.prompt, /# Files mentioned by the user:/);
+  assert.equal(sent.body.thread.messages[0].text, '看看这张图');
+  assert.deepEqual(sent.body.thread.messages[0].attachments, [attachment]);
+  assert.equal((await f.request(`/api/attachments/${attachment.id}/delete`, { ...owner, method: 'POST', data: {} })).status, 409);
+  const thumb = await f.request(attachment.previewUrl, owner);
+  assert.equal(thumb.headers['content-type'], 'image/png');
+  assert.equal(thumb.body, 'original image');
+});
+
+test('stop-then-send waits for confirmed completion and does not send when interrupt fails', async t => {
+  const f = await fixture(t), owner = await f.owner(), events = [];
+  f.app.tasks.owned.set('controlled', {});
+  let status = 'running', stopped;
+  const stopPending = new Promise(resolve => { stopped = resolve; });
+  f.app.tasks.get = async () => ({ thread: { id: 'controlled', status } });
+  f.app.tasks.stop = async () => { events.push('stop'); await stopPending; return { requested: true }; };
+  f.app.tasks.send = async () => { assert.equal(status, 'idle'); events.push('send'); return { accepted: true }; };
+  const sending = f.request('/api/threads/controlled/messages', { ...owner, method: 'POST', data: { prompt: '改做下一件事', action: 'stopThenSend' } });
+  while (!events.length) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.deepEqual(events, ['stop']);
+  const duplicate = await f.request('/api/threads/controlled/messages', { ...owner, method: 'POST', data: { prompt: '不能插入', action: 'steer' } });
+  assert.equal(duplicate.status, 409);
+  status = 'idle'; stopped();
+  assert.equal((await sending).status, 200); assert.deepEqual(events, ['stop', 'send']);
+  status = 'running'; events.length = 0;
+  f.app.tasks.stop = async () => { throw new Error('interrupt failed'); };
+  const failed = await f.request('/api/threads/controlled/messages', { ...owner, method: 'POST', data: { prompt: '不应发出', action: 'stopThenSend' } });
+  assert.equal(failed.status, 500); assert.deepEqual(events, []);
+});
+
+test('stop-then-send never grants native stop and respects the independent phone permission', async t => {
+  const f = await fixture(t), owner = await f.owner(), phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  let writes = 0;
+  f.app.tasks.stop = f.app.tasks.send = async () => { writes++; throw new Error('must not dispatch'); };
+  assert.equal((await f.request('/api/threads/desktop-history/messages', { ...owner, method: 'POST', data: { prompt: 'test', action: 'stopThenSend' } })).status, 409);
+  f.app.tasks.owned.set('controlled', {});
+  assert.equal((await f.request('/api/threads/controlled/messages', { ...phone, method: 'POST', data: { prompt: 'test', action: 'stopThenSend' } })).status, 403);
+  assert.equal(writes, 0);
+});
+
 test('revoking a phone during a pending full-history read prevents the transcript and validator response', async t => {
   const f = await fixture(t);
   const owner = await f.owner(); const phone = await f.pair(owner);
@@ -175,6 +262,16 @@ test('update idle guard refreshes stale native state and fails closed on active 
   assert.equal(await busy(), true);
   f.app.tasks.approvals.clear();
   assert.equal(await busy(), false);
+});
+
+test('update idle guard includes GPT after the send request has already returned', async t => {
+  const f = await fixture(t, { desktop: new FakeDesktop() });
+  f.app.tasks.list = async () => []; f.app.tasks.cache.clear();
+  let calls = 0;
+  f.app.nativeGpt.isBusy = async () => { calls++; return true; };
+  assert.equal(await f.app.updater.options.isBusy(), true); assert.equal(calls, 1);
+  f.app.nativeGpt.isBusy = async () => false;
+  assert.equal(await f.app.updater.options.isBusy(), false);
 });
 
 test('update state requires pairing and update mutations require a local owner with CSRF', async t => {
@@ -545,7 +642,7 @@ test('new task endpoint selects an approved project and forwards model and effor
   const auth = await f.owner();
   const project = await f.defaultProject(auth);
   const calls = [];
-  f.app.tasks.create = async (prompt, cwd, options) => { calls.push({ prompt, cwd, options }); return { thread: { id: 'fake-created', readOnly: false } }; };
+  f.app.tasks.create = async (prompt, cwd, { beforeWrite, ...options }) => { assert.equal(typeof beforeWrite, 'function'); beforeWrite(); calls.push({ prompt, cwd, options }); return { thread: { id: 'fake-created', readOnly: false } }; };
   const result = await f.request('/api/threads', { ...auth, method: 'POST', data: { prompt: '执行指定项目', projectId: project.id, model: 'test-picker', effort: 'high' } });
   assert.equal(result.status, 201);
   assert.equal(path.resolve(calls[0].cwd).toLowerCase(), path.resolve(f.projectRoot).toLowerCase());
@@ -560,8 +657,8 @@ test('message and fork routes pass model choices while enforcing session and CSR
   const f = await fixture(t);
   const auth = await f.owner();
   const calls = [];
-  f.app.tasks.send = async (id, prompt, options) => { calls.push({ kind: 'send', id, prompt, options }); return { thread: { id } }; };
-  f.app.tasks.fork = async (id, options) => { calls.push({ kind: 'fork', id, options }); return { thread: { id: 'fork-new', forkedFromId: id } }; };
+  f.app.tasks.send = async (id, prompt, { beforeWrite, ...options }) => { assert.equal(typeof beforeWrite, 'function'); beforeWrite(); calls.push({ kind: 'send', id, prompt, options }); return { thread: { id } }; };
+  f.app.tasks.fork = async (id, { beforeWrite, ...options }) => { assert.equal(typeof beforeWrite, 'function'); beforeWrite(); calls.push({ kind: 'fork', id, options }); return { thread: { id: 'fork-new', forkedFromId: id } }; };
   const payload = { prompt: '继续', model: 'test-picker', effort: 'high' };
   for (const route of ['/api/threads/desktop-history/messages', '/api/threads/desktop-history/fork']) {
     assert.equal((await f.request(route, { method: 'POST', data: payload })).status, 401);

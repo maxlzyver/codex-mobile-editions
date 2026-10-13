@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$PlanPath,
     [Parameter(Mandatory=$true)][string]$PlanSha256,
-    [ValidateSet('Prepare','Apply')][string]$Mode = 'Prepare',
+    [ValidateSet('Prepare','Apply','Launch')][string]$Mode = 'Prepare',
     [switch]$TestOnly,
     [int]$FailAfterFiles = 0
 )
@@ -15,6 +15,19 @@ $script:plan = $null
 $script:statusFile = $null
 $script:changed = New-Object System.Collections.Generic.List[object]
 $script:restartAttempted = $false
+
+# Node's DETACHED_PROCESS can make Windows PowerShell exit before -File runs.
+# A plain child instead shares the service's lifetime in some desktop hosts.
+# Start-Process creates the independent hidden Windows helper; this small broker
+# remains observable until the handoff, while Apply survives the service exit.
+if ($Mode -eq 'Launch') {
+    if ($TestOnly -or $FailAfterFiles -ne 0) { throw 'Launch is only for the real installation handoff.' }
+    if ($PlanSha256 -notmatch '^[a-fA-F0-9]{64}$' -or $PlanPath -match '["\x00-\x1f]') { throw 'Invalid helper launch arguments.' }
+    $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -PlanPath "' + $PlanPath + '" -PlanSha256 ' + $PlanSha256 + ' -Mode Apply'
+    $helper = Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $arguments -WindowStyle Hidden -PassThru
+    $helper.WaitForExit()
+    exit $helper.ExitCode
+}
 
 function Full([string]$Value) { return [System.IO.Path]::GetFullPath($Value).TrimEnd('\') }
 function Inside([string]$Parent, [string]$Child) {

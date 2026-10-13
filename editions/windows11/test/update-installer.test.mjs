@@ -164,8 +164,9 @@ async function handshakeFixture(t, { behavior = 'waiting', isBusy = () => false,
       await writeFile(path.join(installJob, 'status.json'), JSON.stringify({ version: f.prepared.version, status: 'prepared' }));
     },
     spawnProcess: (_command, args, options) => {
-      assert.equal(args.at(-1), 'Apply');
+      assert.equal(args.at(-1), 'Launch', 'Use the independent Windows launch broker');
       assert.equal(options.windowsHide, true);
+      assert.notEqual(options.detached, true, 'DETACHED_PROCESS must not prevent PowerShell executing its script');
       const child = new EventEmitter(); child.unref = () => {};
       setImmediate(() => {
         if (behavior === 'spawn-error') { child.emit('error', new Error('mock spawn failed')); return; }

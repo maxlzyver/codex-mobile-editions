@@ -7,6 +7,8 @@ This independent community application is not an official OpenAI client. Applica
 | Node.js, macOS arm64 and x64 | 24.19.0 | MIT and bundled dependency notices | https://nodejs.org/dist/v24.19.0/ ; runtime/darwin-arm64/LICENSE, runtime/darwin-x64/LICENSE |
 | cloudflared, macOS arm64 and amd64 | 2026.10.0 | Apache-2.0 | https://github.com/cloudflare/cloudflared ; vendor/cloudflared-LICENSE.txt |
 | qrcode-generator | 1.4.4 | MIT | https://www.npmjs.com/package/qrcode-generator/v/1.4.4 ; vendor/qrcode-LICENSE.txt |
+| marked | 18.1.1 | MIT | https://github.com/markedjs/marked ; public/vendor/marked-LICENSE.txt |
+| KaTeX | 0.19.0 | MIT | https://github.com/KaTeX/KaTeX ; public/vendor/katex-LICENSE.txt |
 
 Node archives were checked against official SHASUMS256.txt. Cloudflared archives were checked against SHA256 digests in official GitHub release metadata; archive and extracted-binary hashes are recorded next to each binary. QR code library retains its original copyright and license.
 

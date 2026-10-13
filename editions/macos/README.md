@@ -1,12 +1,12 @@
-# Codex 移动助手 · macOS 专用版 V1.1.0
+# Codex 移动助手 · macOS 专用版 V1.2.0
 
-版本 **1.1.0** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [邮件反馈](mailto:lzyuan666666@gmail.com)
+版本 **1.2.0** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [邮件反馈](mailto:lzyuan666666@gmail.com)
 
 用手机浏览器查看 Mac 上 Codex 的任务与输出、选择模型和思考强度、远程发送指令，并预览和下载本地项目文件。支持 Wi-Fi 配对、互联网临时连接、主题字体设置、分平台自动更新和自愿赞助入口。
 
-## V1.1.0 更新
+## V1.2.0 更新
 
-近期结果优先显示，历史和执行详情后台补齐；打开过的聊天可立即显示内存缓存，折叠内容按需生成。空闲时减少刷新，保留阅读位置。采用作者提供的新图标。详情见 [本版说明](docs/UPDATE-NOTES.md)。
+同步电脑真实项目与下属聊天，支持在已有 Codex 项目中新建原桌面子聊天；新增复用桌面登录的 GPT 文字续聊、手机 Codex 附件上传和原图下载。消息气泡、文件卡片、Markdown 与公式显示重新整理，增加任务状态与引导选项；助手独立任务还支持停止后发送。修复 Windows 安装助手交接，验证从 1.2 向后续版本自动升级。保留 1.1 的加载优化、图标及既有功能。详情见 [本版说明](docs/UPDATE-NOTES.md) 和 [功能范围](docs/V1.2.0-FEATURES.md)。
 
 ## V1.0.1 已有功能
 
@@ -15,9 +15,9 @@
 
 ## 系统与安装
 
-当前版本为 **V1.1.0**，保留此前全部功能；已安装 1.0.0 / 1.0.1 专用版可通过“检查更新”升级。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.1.0)。
+当前版本为 **V1.2.0**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.2.0)。
 
-- **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.1.0-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
+- **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.2.0-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
 - Mac 需自行安装并登录兼容的 Codex 桌面应用或 CLI；包内不包含 Codex 程序和账户。
 - 完整解压到当前用户可写目录，保持目录结构。不能使用 GitHub 自动生成的 Source code ZIP 代替完整安装包。
 
@@ -35,9 +35,9 @@
 
 ## 聊天与文件
 
-兼容的 Codex 桌面接口存在时可继续原桌面聊天；程序仅尝试当前用户拥有的可信本地 Unix socket。找不到接口时显示只读历史，仍可使用助手自己的 Codex 新建任务或从历史继续分支。分支不等于原聊天，原桌面聊天的审批和强制停止需在电脑处理。内部接口随 Codex 升级可能改变；本版不承诺所有桌面版本都可原聊天发送。
+兼容的 Codex 桌面接口存在时可继续原桌面聊天，并按接口能力选择模型、思考强度或在运行中引导；程序仅尝试当前用户拥有的可信本地 Unix socket。找不到接口时显示只读历史，仍可使用助手自己的 Codex 新建任务或从历史继续分支。分支不等于原聊天，原桌面聊天的审批和强制停止需在电脑处理。内部接口随 Codex 升级可能改变；本版不承诺所有桌面版本都可原聊天发送。
 
-助手自己的任务可以在网页继续、停止及处理支持的审批。模型与思考强度来自当前账户，不增加账户额度或权限，也不继承全部桌面专有工具。
+“新建任务”使用助手独立连接，可以在网页继续、引导、停止及处理支持的审批。Codex 模型与思考强度来自当前账户，不增加账户额度或权限，也不继承全部桌面专有工具。桌面项目下的“新建子聊天”使用原桌面接口，停止与审批仍需在电脑完成。GPT 支持已有聊天的文字读写，沿用电脑聊天中的模型。
 
 文件页访问真实项目目录，可预览 UTF-8 文本／代码（最多 1 MiB）、图片和 PDF，并下载单个文件。电脑可添加其他项目目录。访问限制在已知项目根目录，拒绝越界链接和私有凭据目录；没有文件夹整体打包功能。
 
@@ -49,7 +49,7 @@
 
 电脑管理端可检查和安装更新、开启自动更新；手机仅查看状态。自动更新默认关闭，开启后等待任务和审批空闲再应用。更新器备份文件、替换程序并重启；失败时尝试回滚。本地配置和项目保留，临时互联网地址可能变化。发布说明见 [docs/RELEASING.md](docs/RELEASING.md)。
 
-三个专用版均从 V1.0 开始。旧 1.2 不会自动迁移；首次换装请退出旧助手，将新包解压到新目录、重新选项目并配对。不要把旧 `.runtime` 整目录覆盖过来。
+三个专用版均从 V1.0 开始。旧通用版 1.2 不会自动迁移到本仓库的专用版；首次换装请退出旧助手，将新包解压到新目录、重新选项目并配对。不要把旧 `.runtime` 整目录覆盖过来。
 
 ## 与 ChatGPT App 的区别
 
@@ -63,4 +63,4 @@ Wi-Fi 模式使用局域网 HTTP，请使用可信网络。互联网模式经 Cl
 
 V1.0.0 基线在 Windows 开发主机运行跨平台协议和独立安装器测试，Mac 启动、进程、隧道和回滚逻辑有专用测试。GitHub Actions 配置了 Apple 芯片和 Intel 的 macOS 运行器，但这些验证不等同于真实 Finder、Codex 桌面和手机网络端到端验收；没有本地 Mac 实机完整测试。详情见 [兼容性说明](docs/COMPATIBILITY.md) 和项目 Actions 结果。
 
-V1.1.0 本次回归结果见对应发布记录和 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)，不以既有测试结果代替新版验证。
+V1.2.0 本次回归结果见对应发布记录和 [Actions](https://github.com/maxlzyver/codex-mobile-editions/actions)，不以既有测试结果代替新版验证。

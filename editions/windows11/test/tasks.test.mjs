@@ -112,6 +112,24 @@ function approval(bridge, tasks, threadId, method, extra = {}) {
   return { rpcId, pending: [...tasks.approvals.values()].find(value => value.rpcId === rpcId) };
 }
 
+test('generated image saved paths remain primary output without copying binary results or input image views', async t => {
+  const { tasks, bridge, directory } = await fixture(t);
+  const savedPath = path.join(directory, 'generated.png');
+  const items = [
+    { id: 'input-image', type: 'imageView', path: path.join(directory, 'input.png') },
+    { id: 'output-image', type: 'imageGeneration', status: 'completed', savedPath, result: 'SECRET_BINARY_RESULT', revisedPrompt: 'PRIVATE_METADATA' },
+    { id: 'unsaved-image', type: 'imageGeneration', status: 'completed', result: 'SECRET_BINARY_RESULT' },
+  ];
+  bridge.threads.set('image-chat', { id: 'image-chat', cwd: directory, status: { type: 'idle' }, turns: [{ id: 'image-turn', status: 'completed', items }] });
+  const view = await tasks.get('image-chat', { stage: 'recent' });
+  assert.deepEqual(view.thread.messages.map(message => message.id), ['output-image']);
+  assert.equal(view.thread.messages[0].role, 'assistant'); assert.equal(view.thread.messages[0].deferred, undefined);
+  assert.deepEqual(view.thread.messages[0].generatedImage, { savedPath });
+  assert(!JSON.stringify(view).includes('SECRET_BINARY_RESULT')); assert(!JSON.stringify(view).includes('PRIVATE_METADATA'));
+  bridge.event('item/completed', { threadId: 'image-chat', turnId: 'image-turn', item: { ...items[1], id: 'streamed-image' } });
+  assert.equal(tasks.cache.get('image-chat').messages.at(-1).generatedImage.savedPath, savedPath);
+});
+
 test('create persists ownership, uses workspace permission defaults, and starts the exact prompt', async t => {
   const { tasks, bridge, directory } = await fixture(t);
   const result = await tasks.create('  创建一个报告  ');
@@ -508,11 +526,11 @@ test('a failed or still-pending CLI submission is not labelled as accepted', asy
 test('standalone views advertise real owned capabilities and keep desktop history read-only', async t => {
   const { tasks, bridge, directory } = await fixture(t);
   const owned = await tasks.create('Owned task');
-  assert.deepEqual(owned.thread.capabilities, { send: true, stop: true, approvals: true, modelSelection: true, effortSelection: true, fork: true });
+  assert.deepEqual(owned.thread.capabilities, { send: true, stop: true, steer: true, attachments: true, approvals: true, modelSelection: true, effortSelection: true, fork: true });
   bridge.threads.set('history', { id: 'history', cwd: directory, status: { type: 'idle' }, turns: [] });
   const history = await tasks.get('history');
   assert.equal(history.thread.readOnly, true);
-  assert.deepEqual(history.thread.capabilities, { send: false, stop: false, approvals: false, modelSelection: false, effortSelection: false, fork: true });
+  assert.deepEqual(history.thread.capabilities, { send: false, stop: false, steer: false, attachments: false, approvals: false, modelSelection: false, effortSelection: false, fork: true });
 });
 
 test('stop loads an uncached owned thread and interrupts only its active turn without resuming it', async t => {

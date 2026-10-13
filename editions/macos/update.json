@@ -12,9 +12,9 @@
       "sha256": "2ae4212406f699b8574cf7c4fb6bf152ef306224b8d03027c9bc1343f507f827"
     },
     {
-      "bytes": 6791,
+      "bytes": 7452,
       "path": "README.md",
-      "sha256": "2a12b690d1c0a98e9929067ff0234bbd0792575a757dd5662310fc25147b2254"
+      "sha256": "73b3bfe0609712505e5c3a5baeefb1082dfc03c13e60a5cdbe9968ed37cd0d16"
     },
     {
       "bytes": 456,
@@ -27,24 +27,24 @@
       "sha256": "f611a23c68d229e41e1ea3b14faa69343e1bb8b2dc5e84e3f0b3192a424d5033"
     },
     {
-      "bytes": 1327,
+      "bytes": 1517,
       "path": "THIRD_PARTY_NOTICES.md",
-      "sha256": "db397a756ef342220de93de98ca44f4acbe82375ff27a911409e227e30428fbc"
+      "sha256": "85faf20e15e6976d7a20e8a5a998bc5a3e4afd840b13bf57c3333526a61ed728"
     },
     {
       "bytes": 1958,
       "path": "docs/COMPATIBILITY.md",
-      "sha256": "3aa236f86f946fe5ed3d9b9460d27066161cb574e3e6a7d56995e346bd1de82e"
+      "sha256": "9eed9f73960ae6320c366af3b0b4a7148352627d92b5fe2b19cc566a381072a9"
     },
     {
       "bytes": 2038,
       "path": "docs/RELEASING.md",
-      "sha256": "a78ff5baea3a2f91bcb6f8eeecb27da56c9ab68e6189ed1b781dc9b436aebe27"
+      "sha256": "90c03a473ffe1210538712f06fdb6abd4720b9e24e03490586934d83a286cd09"
     },
     {
-      "bytes": 1202,
+      "bytes": 1784,
       "path": "docs/UPDATE-NOTES.md",
-      "sha256": "154cfb32a0719419ba74a87f6d0d9f37f2802d9a2910932e7ff1c6b9c8600252"
+      "sha256": "eba050df8050786590e67e0aa0ac3b33ac999fe762098a78c2559b1a903973c6"
     },
     {
       "bytes": 2828,
@@ -52,14 +52,29 @@
       "sha256": "ccb118524a445b00a527c6b95242267af81ac1609a5a736e5ab5b5d642a399fb"
     },
     {
+      "bytes": 2653,
+      "path": "docs/V1.2.0-FEATURES.md",
+      "sha256": "e6eda60931fcd4ba68efcffaba163d5e7174f5ad3159aa086da44079e29f2deb"
+    },
+    {
+      "bytes": 2901,
+      "path": "docs/V1.2.0-UPGRADE.md",
+      "sha256": "600cfef6f122f5b669ba99f112e814f4fb4474986e36d3c61db13e5cd72eb43e"
+    },
+    {
       "bytes": 247,
       "path": "edition.json",
-      "sha256": "c4e7435b8213efee1157ec15a8e89224e3888b271fd6cae4aadcc1bf04731160"
+      "sha256": "0a29e93d94bc37aa641b9ed38872525232d758ef14db7904b5056f7c578c9c26"
     },
     {
       "bytes": 541,
       "path": "lib/app-info.mjs",
       "sha256": "a8bec57ee072a796eec8d31de80bafe067388288f5fe25af06366d9c7eeb5f89"
+    },
+    {
+      "bytes": 15488,
+      "path": "lib/attachments.mjs",
+      "sha256": "21f3861c3083b74f522d16c4b414888be74f85e68490e3d869f320bdff740423"
     },
     {
       "bytes": 10866,
@@ -72,9 +87,14 @@
       "sha256": "bc42cc5d51249f72efa7ee30ae59fe6c2e702a9c88eb9e7367a4e52b65117a29"
     },
     {
-      "bytes": 19496,
+      "bytes": 12365,
+      "path": "lib/desktop-projects.mjs",
+      "sha256": "db319e26f0d1aea2ecf80bc6e12f0d7d51a6d2de526474d959cea28a7e182485"
+    },
+    {
+      "bytes": 20134,
       "path": "lib/desktop-tasks.mjs",
-      "sha256": "c15fa453fa29fefb317e11fcb9f43c0c6c68f2b7e63a4c4bee4f0837fca81fc5"
+      "sha256": "9d3ac969f6ae48ea40688264da914f8eefe4b55099c51898db71d21dcfa1ebd1"
     },
     {
       "bytes": 21820,
@@ -92,6 +112,11 @@
       "sha256": "479eddcf4b78fc11c1e1d297b29cba9a5a751e391c46c6a3bffb62506e2689fb"
     },
     {
+      "bytes": 13282,
+      "path": "lib/native-gpt.mjs",
+      "sha256": "afb6e978a55f827ff365959ff8a9d23b97d54600cd08a0718e10b964198d5f68"
+    },
+    {
       "bytes": 2259,
       "path": "lib/permissions.mjs",
       "sha256": "a15e417c87eb1ab417501ae5dc900c0e31b610dead231ca8ac0bce7b166be808"
@@ -107,9 +132,9 @@
       "sha256": "4f6f786abd7529279f54ba7fcabea978e2f730fcca88d93fe716dfa31b9737ea"
     },
     {
-      "bytes": 20145,
+      "bytes": 21018,
       "path": "lib/tasks.mjs",
-      "sha256": "5be7e642971e63efd0055c4542ccf0f94fe525ec740cb54981503619285f9134"
+      "sha256": "e10cbaa3cd3ef7145be9953d264c8c7248cd38cbbbba7cb6bca7c2aba84cd3a3"
     },
     {
       "bytes": 15907,
@@ -129,7 +154,7 @@
     {
       "bytes": 603,
       "path": "package.json",
-      "sha256": "27857d85346d81a7d72bbd1ef41bd98d56a48beafc6c8502e3ec94a39e22d6ce"
+      "sha256": "db07ce9fdcde0ce863d99da3a28f21ab7f6716ea6ef6383df43fc3336cf1b1d4"
     },
     {
       "bytes": 40084,
@@ -147,9 +172,9 @@
       "sha256": "ae7ffc0a72459a8c57518c5b060b9153760d5c43822426a9af09af3dadde2f96"
     },
     {
-      "bytes": 88777,
+      "bytes": 111374,
       "path": "public/app.js",
-      "sha256": "f44ef88e12df8ce9bb6e66e8526034f2f144acaab1df381578a3a813382ecabe"
+      "sha256": "4213b3549c74e3e8be3c6efeed30d898179c859aa78e051c56d037ec00ac41d1"
     },
     {
       "bytes": 35362,
@@ -167,14 +192,19 @@
       "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
     },
     {
-      "bytes": 32845,
+      "bytes": 36256,
       "path": "public/index.html",
-      "sha256": "0b77532c27cd17bd7d58d5449e44554af3210c34150456969782d5f92ebb76d3"
+      "sha256": "8532a3a371ef9884913fe8977e5fb21d36f37b790f73527da9abf650875596c6"
     },
     {
       "bytes": 617,
       "path": "public/manifest.webmanifest",
       "sha256": "7e24ee63e003f34cb04f1169789b9218c2c39cb18bdfc61b571d061b5d2195c5"
+    },
+    {
+      "bytes": 8907,
+      "path": "public/rich-content.js",
+      "sha256": "133b329b0c213b3ad16856c049b5b629bd9fe3a9c50613ccc22e14a0132a6e5e"
     },
     {
       "bytes": 17495,
@@ -187,9 +217,9 @@
       "sha256": "59f2304b1a280a66c6c435b7964e4c11ed1e1b78f26af863afbaa42a8a5e931a"
     },
     {
-      "bytes": 39284,
+      "bytes": 48762,
       "path": "public/styles.css",
-      "sha256": "c49839d582ec3d24ee3f08fdd25e72fb2522dd2cc91315da98ae7691660382b7"
+      "sha256": "33a9635841e9fc8c859b60c353850b985b6e56501819b473f22b236e135ef294"
     },
     {
       "bytes": 121660,
@@ -197,9 +227,34 @@
       "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
     },
     {
-      "bytes": 25028,
+      "bytes": 1107,
+      "path": "public/vendor/katex-LICENSE.txt",
+      "sha256": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3"
+    },
+    {
+      "bytes": 272868,
+      "path": "public/vendor/katex.js",
+      "sha256": "103a53763cc033bba8d175bf3f0ba597c3505c9b6747dd3f2c7bc2a6bfcc8ae7"
+    },
+    {
+      "bytes": 2942,
+      "path": "public/vendor/marked-LICENSE.txt",
+      "sha256": "8e3a3f82f59a60958f56ca08f445647c32a4733dc7ca6c2c46f6eb898471ab9c"
+    },
+    {
+      "bytes": 47956,
+      "path": "public/vendor/marked.js",
+      "sha256": "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a"
+    },
+    {
+      "bytes": 34210,
       "path": "server.mjs",
-      "sha256": "3076ebf075f2f108986f6f682f8abb7ba4702358d96e4c7c5348c273a5d9c411"
+      "sha256": "06724e047c0ce8f52cd441bfdd9784b2f53c8119e0060cb2c361660c3208ebae"
+    },
+    {
+      "bytes": 12394,
+      "path": "test/attachments.test.mjs",
+      "sha256": "79de361707c0a0bab6e9febc76e65a01c479dfe7a8133e047a9d3b36dd196b54"
     },
     {
       "bytes": 6545,
@@ -212,9 +267,9 @@
       "sha256": "4f768804074285e7b7291137a9676a982cf4e8f2588793369c34b95362a7a3c9"
     },
     {
-      "bytes": 28931,
+      "bytes": 30099,
       "path": "test/desktop-tasks.test.mjs",
-      "sha256": "e8707c6d8276e7dabfc1625567603231c0e39968b8b2aaf03dc3ed8ef4b195ea"
+      "sha256": "8d785db74b8619a997882fb09c23a53006b2722afc73d2c8fcc43a4105fdb6d6"
     },
     {
       "bytes": 16391,
@@ -232,14 +287,24 @@
       "sha256": "8fca75644ffb21bce0966d1a92f8aad33874e6d4952d64073d18c45c5b2b0d49"
     },
     {
+      "bytes": 16635,
+      "path": "test/native-gpt.test.mjs",
+      "sha256": "3573b17a1808180a4bbb4a5d6a4c935dd61bcdaa1b46e54e336ea0ff0ff6b9f0"
+    },
+    {
+      "bytes": 12002,
+      "path": "test/native-routes.test.mjs",
+      "sha256": "a76ff465f21b0674ce727356d03fac1f0bc932d9d74b52df75bec28ea61e9c5b"
+    },
+    {
       "bytes": 3147,
       "path": "test/permissions.test.mjs",
       "sha256": "4bb0c11dcbdbd6d44c1e727fcc8d97789a36417709900032628e8771c811cdfa"
     },
     {
-      "bytes": 42282,
+      "bytes": 48780,
       "path": "test/server.test.mjs",
-      "sha256": "6c1daca59784006867a2c507b86f0fbc75b77eb8e745508162339fd4a04d825e"
+      "sha256": "356e22c11be3c5a4163a089fbc1c210de6a9119f1cb09e4c77a55eebe1b63a6b"
     },
     {
       "bytes": 6172,
@@ -247,9 +312,9 @@
       "sha256": "9731769622dfb6a8c30c9ac29d558bb3b921439137a759e12e2e50d7ae986821"
     },
     {
-      "bytes": 34240,
+      "bytes": 35779,
       "path": "test/tasks.test.mjs",
-      "sha256": "ca6ff94fe572bc04990b899670bb3e3bf9b1a25fe130717022029c93ef6a6e9e"
+      "sha256": "bac09fe9620593eb473d51abf80a24807f32bdb9b6a9f29f929a3d0e3dd1c901"
     },
     {
       "bytes": 5001,
@@ -284,8 +349,8 @@
   ],
   "name": "Codex 移动助手",
   "platform": "macOS universal",
-  "releaseNotes": "V1.1.0 · 加载优化与新图标\n\n- 优先显示近期用户消息与最终答复，再在后台补齐更早历史和执行详情。\n- 已打开过的聊天使用有界内存缓存，返回时先显示上次内容，再同步最新进展；退出或撤销授权后清空。\n- 折叠过程和工具正文在展开时才生成，减少长执行记录对手机显示的影响；过程数据仍可后台预加载。\n- 只重绘变化的消息，空闲时降低刷新频率，未变化的数据使用版本校验减少传输；后台补齐时保持阅读位置。\n- 更换为作者提供的新图标，应用于网页、手机添加到主屏幕以及 Windows 启动器与托盘。\n- 保留原有文件预览下载、发送回执、模型选择、整轮折叠、手机权限、配对、外观、反馈与赞助。\n- 继续在启动后及每 6 小时检查更新，显示新版说明；可选择本版本不再提示，直到下次更新，自动安装仍默认关闭。\n\nWindows 11、Windows 10、macOS 专用版统一升至 1.1.0。1.0.0 和 1.0.1 专用版可通过原有更新入口升级；更新保留 .runtime、电脑项目与 Codex 聊天。本版未加入 GPT 模式或新的账号登录入口。",
+  "releaseNotes": "V1.2.0 · 项目、GPT 聊天、附件与自动升级\n\n- 左侧按电脑真实项目归类聊天，支持在已有 Codex 项目内新建子聊天；不按文件路径猜测项目归属。\n- 新增 GPT 切换，直接复用桌面登录，查看与继续已有 GPT 聊天。GPT 沿用电脑当前聊天的模型；新建、模型切换、停止和附件发送请在电脑完成。\n- 手机支持从相册或文件管理添加 Codex 附件，显示上传进度、图片预览和文件类型卡片，可下载附件与图片原图。每次最多 8 个文件，单个最多 25 MiB。\n- 用户消息改为紧凑的右侧气泡；将系统问答回执和附件说明还原为实际内容。改进 Markdown、代码、表格与公式显示。\n- 执行中显示状态条，可引导当前 Codex 任务；助手独立任务在权限允许时还支持停止后发送。桌面原聊天（包括手机在桌面项目中新建的子聊天）的停止仍需在电脑完成。\n- 修复 Windows 更新助手提前退出的问题；1.2 开启自动更新后自动发现新版，等待任务空闲，下载、校验、安装并重启，保留本地设置和配对。\n- 保留启动后及每 6 小时的更新检查、版本说明和“下次更新前不再提示”（仅本版本不再提示）；关闭自动安装仍会提醒新版。\n- 保留 1.1 的近期结果优先、历史和执行记录逐步加载、原图标、整轮折叠、文件浏览、模型与思考强度、权限、主题字体、反馈和赞助。\n\n三种专用版统一为 1.2.0。重点验证从 1.2 自动升级到后续版本；更早版本更新失败时可先换装完整包。桌面功能取决于本机接口能力，不等同于全部 ChatGPT 桌面功能；列表未返回的较早聊天请先在电脑打开再刷新。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
-  "version": "1.1.0"
+  "version": "1.2.0"
 }

@@ -31,6 +31,8 @@
   document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(...icon(node.dataset.icon).childNodes));
 
   const state = {
+    mode: 'codex', nativeProjects: [], nativeProjectId: '', projectCatalog: null, projectCatalogAt: 0, projectExpanded: new Map(), gptStatus: null, gptPage: null, gptHistory: [], gptHistoryBusy: null, pendingCreation: false,
+    attachmentDrafts: [], uploadRequests: new Set(), attachmentSequence: 0,
     snapshots: new Map(), snapshotChars: 0, renderedRows: new Map(), recentRevision: '', fullRevision: '', desiredDetailsRevision: '', loadedDetailsRevision: '', recentMessages: [], progressive: false,
     detailBusy: null, detailTimer: null, detailAttempts: 0, lastDetailAt: 0, threadPollTimer: null, listPollTimer: null, listBusy: null, sessionRevision: 0,
     outgoing: new Map(), outgoingSequence: 0, conversationGeneration: 0, readRevision: 0, lastSubmissionWarning: '',
@@ -153,6 +155,7 @@
         ? '手机停止任务已关闭。需要时请在电脑端「设置 → 手机权限」开启；不会停止其他聊天。'
         : standalone ? '任务由电脑 Codex 执行 · 手机审批与停止须同时具备权限和聊天支持。' : '任务在电脑上执行 · 操作能力以当前聊天和手机权限为准。';
     refreshPermissionControls();
+    refreshComposerControls();
     if (status.error && state.role === 'owner' && state.lastStatus !== status.error) {
       showError(new Error(status.error));
       state.lastStatus = status.error;
@@ -191,7 +194,7 @@
         if (!state.shownReady || previousRole !== state.role) {
           state.shownReady = true;
           await loadThreads();
-          await Promise.allSettled([loadProjects(), loadModels()]);
+          await Promise.allSettled([loadProjects(), loadModels(), loadDesktopProjects()]);
           if (previousRole === 'pending') toast('电脑已确认，现在可以开始工作了');
         } else if (accessChanged) await reloadFileAccess();
       } else if (state.role === 'pending') {
@@ -219,6 +222,31 @@
   }
 
   function codexVisible() { return !document.hidden; }
+  function threadApi(id = '', suffix = '') { return (state.mode === 'gpt' ? '/api/gpt/threads' : '/api/threads') + (id ? '/' + encodeURIComponent(id) : '') + suffix; }
+  function snapshotKey(id) { return state.mode + ':' + id; }
+  function refreshComposerControls() {
+    const authorized = ['owner', 'controller'].includes(state.role), gpt = state.mode === 'gpt';
+    hidden('chat-mode-bar', !authorized || !state.bootstrap?.features?.nativeGpt);
+    $('attach-files').disabled = !authorized || state.sending || state.activeReadOnly || !state.bootstrap?.features?.attachments || gpt;
+    $('attach-files').title = gpt ? '当前桌面 GPT 接口不支持附件发送' : !state.bootstrap?.features?.attachments ? '需要电脑端支持附件上传' : '添加照片或文件';
+    const running = isRunning(state.thread);
+    hidden('composer-activity', !running);
+    $('composer-activity-label').textContent = running ? gpt ? 'GPT 正在回复 · 请等待完成' : '正在工作 · 可以补充说明' : '等待下一条指令';
+    const stopAllowed = taskPermission('stop', 'allowMobileStop');
+    $('send-behavior').options[1].disabled = !stopAllowed;
+    if (!stopAllowed) $('send-behavior').value = 'steer';
+    $('send-behavior').disabled = state.sending || gpt;
+    $('send-behavior').title = gpt ? '当前 GPT 接口不支持中途引导或停止，请到电脑处理' : stopAllowed ? '引导当前任务，或停止后发送' : '当前聊天不支持在手机停止，请到电脑处理；仍可发送引导';
+    $('send-behavior-note').textContent = $('send-behavior').title;
+    if (gpt) {
+      $('active-model').textContent = '沿用电脑聊天模型';
+      $('composer-hint').textContent = state.gptStatus?.hint || '继续电脑上已有的 GPT 聊天；当前接口不支持新建、切换模型、附件或停止。';
+      $('prompt').disabled = !state.activeId || state.activeReadOnly;
+      $('send').disabled = !state.activeId || state.sending || state.activeReadOnly;
+      if (running) { $('send').disabled = true; $('composer-hint').textContent = 'GPT 正在回复，当前桌面接口暂不支持中途引导或停止，请等待回复完成。'; }
+    }
+    if (state.pendingCreation) { $('prompt').disabled = true; $('send').disabled = true; $('composer-hint').textContent = '聊天正在桌面创建。完成后从该项目列表打开；请勿重复发送。'; }
+  }
   function scheduleThreadPoll() {
     clearTimeout(state.threadPollTimer);
     if (codexVisible() && state.activeId && ['owner', 'controller'].includes(state.role)) state.threadPollTimer = setTimeout(() => loadThread(), isRunning(state.thread) ? 1500 : 15000);
@@ -229,14 +257,15 @@
   }
   async function loadThreads() {
     if (!codexVisible() || !['owner', 'controller'].includes(state.role) || state.listBusy) return;
-    const request = { identity: state.role + ':' + state.csrf, revision: state.sessionRevision };
-    const current = () => request.identity === state.role + ':' + state.csrf && request.revision === state.sessionRevision;
+    const request = { identity: state.role + ':' + state.csrf, revision: state.sessionRevision, mode: state.mode };
+    const current = () => request.identity === state.role + ':' + state.csrf && request.revision === state.sessionRevision && request.mode === state.mode;
     state.listBusy = request;
     try {
-      const data = await api('/api/threads');
+      const data = await api(threadApi());
       if (!current()) return;
+      if (state.mode === 'gpt') { state.gptStatus = data; refreshComposerControls(); }
       state.threads = data.threads || data.data || [];
-      const key = JSON.stringify(state.threads.map((t) => [t.id, t.title || t.name || t.preview, t.updatedAt, t.status]));
+      const key = JSON.stringify(state.threads.map((t) => [t.id, t.title || t.name || t.preview, t.updatedAt, t.status, t.projectId]));
       if (key === state.lastThreads) return;
       state.lastThreads = key;
       renderThreads();
@@ -249,11 +278,11 @@
   function renderThreads() {
     const list = $('thread-list');
     list.replaceChildren();
-    if (!state.threads.length) {
+    if (!state.threads.length && !state.nativeProjects.length) {
       list.append(node('p', 'list-empty', '还没有任务，开始第一段工作吧。'));
       return;
     }
-    for (const thread of state.threads) {
+    const threadButton = thread => {
       const button = node('button', `thread-item${thread.id === state.activeId ? ' active' : ''}`);
       button.type = 'button';
       button.append(icon('chat'));
@@ -262,11 +291,57 @@
       text.append(node('span', 'thread-item-meta', [statusLabel(thread), dateLabel(thread.updatedAt || thread.createdAt)].filter(Boolean).join(' · ')));
       button.append(text);
       button.addEventListener('click', () => openThread(thread.id));
-      list.append(button);
+      return button;
+    };
+    const used = new Set();
+    for (const project of state.nativeProjects.filter(project => project.kind === (state.mode === 'gpt' ? 'chatgpt' : 'codex'))) {
+      const group = node('details', 'sidebar-project'); group.dataset.projectId = project.id;
+      group.open = state.projectExpanded.get(project.id) !== false;
+      const summary = node('summary', 'sidebar-project-heading'); summary.append(icon('folder'), node('span', '', project.name || '未命名项目'));
+      const children = state.threads.filter(thread => thread.projectId === project.id || project.threadIds?.includes(thread.id));
+      const count = node('small', '', children.length); count.title = '已读取的聊天数，并非项目聊天总数'; summary.append(count); group.append(summary);
+      group.addEventListener('toggle', () => { if (group.isConnected) state.projectExpanded.set(project.id, group.open); });
+      const body = node('div', 'sidebar-project-chats');
+      if (state.mode === 'codex') {
+        const create = node('button', 'project-new-chat', '＋ 新建子聊天'); create.type = 'button'; create.disabled = project.capabilities?.createThread !== true;
+        create.title = create.disabled ? '此桌面项目暂不支持手机新建聊天' : '在这个桌面项目内新建聊天';
+        create.addEventListener('click', () => { resetConversation(); state.nativeProjectId = project.id; $('thread-title').textContent = project.name + ' · 新聊天'; $('thread-cwd').textContent = project.cwd || '沿用桌面项目'; $('project-select').disabled = true; $('prompt').placeholder = '描述新聊天要完成的任务…'; $('prompt').focus(); }); body.append(create);
+      }
+      for (const thread of children) { used.add(thread.id); body.append(threadButton(thread)); }
+      if (!children.length) body.append(node('p', 'list-empty', '暂未读取到聊天，可在电脑打开后刷新'));
+      group.append(body); list.append(group);
     }
+    const others = state.threads.filter(thread => !used.has(thread.id));
+    if (state.nativeProjects.length && others.length) list.append(node('div', 'unassigned-chats-label', '其他聊天'));
+    for (const thread of others) list.append(threadButton(thread));
+  }
+  async function loadDesktopProjects() {
+    if (!state.bootstrap?.features?.desktopProjects || !['owner', 'controller'].includes(state.role)) return;
+    const revision = state.sessionRevision;
+    try {
+      const data = await api('/api/desktop/projects');
+      if (revision !== state.sessionRevision || !['owner', 'controller'].includes(state.role)) return;
+      state.projectCatalog = data; state.nativeProjects = data.projects || []; state.projectCatalogAt = Date.now();
+      $('desktop-project-note').textContent = data.available === false ? data.hint || '请在电脑打开 Codex，连接后显示桌面项目。' : data.complete === false ? '显示当前桌面接口可访问的项目与聊天' : '';
+      hidden('desktop-project-note', !$('desktop-project-note').textContent); renderThreads();
+    } catch (error) { if (revision === state.sessionRevision && ['owner', 'controller'].includes(state.role)) { $('desktop-project-note').textContent = error.message; hidden('desktop-project-note', false); } }
+  }
+  async function changeChatMode(mode) {
+    if (state.mode === mode || !['owner', 'controller'].includes(state.role)) return;
+    resetConversation(); state.mode = mode; state.nativeProjectId = ''; state.threads = []; state.lastThreads = ''; state.listBusy = null;
+    document.body.dataset.chatMode = mode;
+    $('chat-mode-codex').setAttribute('aria-pressed', String(mode === 'codex')); $('chat-mode-gpt').setAttribute('aria-pressed', String(mode === 'gpt'));
+    $('chat-mode-note').textContent = mode === 'gpt' ? '继续电脑上已有的 GPT 聊天' : '项目工作与代码任务';
+    $('new-thread').disabled = mode === 'gpt'; $('mobile-new').disabled = mode === 'gpt';
+    $('new-thread').title = mode === 'gpt' ? '当前桌面接口不支持新建 GPT 聊天，请在电脑创建后刷新' : '新建助手任务';
+    $('thread-title').textContent = mode === 'gpt' ? '选择一个电脑 GPT 聊天' : '新的开始';
+    hidden('welcome', mode === 'gpt');
+    if (mode === 'gpt') $('messages').append(node('p', 'list-empty', '从左侧选择电脑上已有的 GPT 聊天。无需重复登录；新建聊天及不支持的操作仍在电脑完成。'));
+    refreshComposerControls(); await loadThreads(); if (mode === 'codex') await loadModels();
   }
   function closeSidebar() { $('workspace').classList.remove('sidebar-open'); }
   function resetConversation() {
+    clearAttachmentDrafts(); state.nativeProjectId = ''; state.pendingCreation = false; state.gptPage = null; state.gptHistory = []; hidden('load-gpt-history', true);
     stopConversationReads();
     state.conversationGeneration++;
     state.renderedRows.clear();
@@ -303,14 +378,17 @@
     clearTimeout(state.detailTimer); state.detailTimer = null;
     clearTimeout(state.threadPollTimer); state.threadPollTimer = null;
     state.readBusy?.controller?.abort(); state.detailBusy?.controller?.abort();
+    state.gptHistoryBusy?.controller?.abort(); state.gptHistoryBusy = null;
     state.readBusy = false; state.detailBusy = null;
   }
   function clearConversationCache() {
+    clearAttachmentDrafts(); state.nativeProjects = []; state.projectCatalog = null; state.gptStatus = null; state.pendingCreation = false;
     stopConversationReads();
     state.snapshots.clear(); state.snapshotChars = 0; state.renderedRows.clear();
     state.sessionRevision++; state.listBusy = null;
     state.conversationGeneration++; state.readRevision++;
     state.thread = null; state.activeId = null; state.outgoing.clear(); state.threads = []; state.lastThreads = '';
+    state.gptPage = null; state.gptHistory = []; hidden('load-gpt-history', true);
     state.recentMessages = []; state.recentRevision = ''; state.fullRevision = ''; state.desiredDetailsRevision = ''; state.loadedDetailsRevision = ''; state.progressive = false;
     state.shownReady = false; state.lastMessages = ''; state.lastApprovals = '';
     $('messages').replaceChildren(); $('approvals').replaceChildren(); $('thread-list').replaceChildren();
@@ -319,10 +397,10 @@
     const thread = data.thread;
     if (!thread?.id || !Array.isArray(thread.messages)) return;
     const chars = thread.messages.reduce((total, message) => total + String(messageText(message)).length + 300, 0);
-    const prior = state.snapshots.get(thread.id);
-    if (prior) { state.snapshotChars -= prior.chars; state.snapshots.delete(thread.id); }
+    const cacheId = snapshotKey(thread.id), prior = state.snapshots.get(cacheId);
+    if (prior) { state.snapshotChars -= prior.chars; state.snapshots.delete(cacheId); }
     if (chars > 2000000) return;
-    state.snapshots.set(thread.id, { data: { ...data, thread: { ...thread, messages: [...thread.messages] } }, chars, recentRevision: state.recentRevision, fullRevision: state.fullRevision, desiredDetailsRevision: state.desiredDetailsRevision, loadedDetailsRevision: state.loadedDetailsRevision, recentMessages: state.recentMessages, progressive: state.progressive });
+    state.snapshots.set(cacheId, { data: { ...data, thread: { ...thread, messages: [...thread.messages] } }, chars, recentRevision: state.recentRevision, fullRevision: state.fullRevision, desiredDetailsRevision: state.desiredDetailsRevision, loadedDetailsRevision: state.loadedDetailsRevision, recentMessages: state.recentMessages, progressive: state.progressive, gptPage: state.gptPage, gptHistory: state.gptHistory });
     state.snapshotChars += chars;
     while (state.snapshots.size > 8 || state.snapshotChars > 4000000) {
       const id = state.snapshots.keys().next().value;
@@ -360,10 +438,10 @@
     resetConversation();
     state.activeId = id;
     hidden('welcome', true);
-    const cached = state.snapshots.get(id);
+    const cached = state.snapshots.get(snapshotKey(id));
     if (cached) {
-      state.snapshots.delete(id); state.snapshots.set(id, cached);
-      for (const key of ['recentRevision', 'fullRevision', 'desiredDetailsRevision', 'loadedDetailsRevision', 'recentMessages', 'progressive']) state[key] = cached[key];
+      state.snapshots.delete(snapshotKey(id)); state.snapshots.set(snapshotKey(id), cached);
+      for (const key of ['recentRevision', 'fullRevision', 'desiredDetailsRevision', 'loadedDetailsRevision', 'recentMessages', 'progressive', 'gptPage', 'gptHistory']) state[key] = cached[key];
       state.thread = cached.data.thread;
       applyThreadView({ ...cached.data, approvals: [] }, true);
       $('thread-state').textContent = '已保存记录 · 正在同步'; hidden('thread-state', false);
@@ -383,10 +461,11 @@
     state.readBusy = request;
     try {
       const since = !forceScroll && state.recentRevision ? '&since=' + encodeURIComponent(state.recentRevision) : '';
-      const data = await api(`/api/threads/${encodeURIComponent(id)}?stage=recent${since}`, { signal: request.controller.signal });
+      const data = await api(threadApi(id) + `?stage=recent${since}`, { signal: request.controller.signal });
       if (!readStillCurrent(request)) return;
       if (data.unchanged) { if (state.progressive) scheduleDetails(); return; }
       const incoming = data.thread || data;
+      if (state.mode === 'gpt' && data.page && !state.gptHistory.length) state.gptPage = data.page;
       const recent = incoming.loadingStage === 'recent';
       state.progressive = recent;
       state.recentRevision = data.revision || incoming.revision || '';
@@ -395,7 +474,7 @@
         state.desiredDetailsRevision = incoming.detailsRevision || state.recentRevision;
         state.thread = { ...incoming, messages: mergeRecentMessages(state.thread?.messages || [], state.recentMessages) };
       } else {
-        state.thread = incoming;
+        state.thread = state.mode === 'gpt' && state.gptHistory.length ? { ...incoming, messages: mergeRecentMessages(state.gptHistory, incoming.messages || []) } : incoming;
         state.fullRevision = data.revision || incoming.revision || '';
         state.loadedDetailsRevision = incoming.detailsRevision || state.fullRevision;
       }
@@ -425,14 +504,16 @@
     state.detailBusy = request; state.lastDetailAt = Date.now(); state.detailAttempts++;
     try {
       const since = state.fullRevision ? '&since=' + encodeURIComponent(state.fullRevision) : '';
-      const data = await api(`/api/threads/${encodeURIComponent(request.id)}?stage=full${since}`, { signal: request.controller.signal });
+      const data = await api(threadApi(request.id) + `?stage=full${since}`, { signal: request.controller.signal });
       if (!readStillCurrent(request)) return;
       if (!data.unchanged) {
         const full = data.thread || data;
         state.fullRevision = data.revision || full.revision || '';
         state.loadedDetailsRevision = full.detailsRevision || state.fullRevision;
         // Current recent messages and metadata win over an older background snapshot.
-        state.thread = { ...full, ...state.thread, messages: mergeRecentMessages(full.messages || [], state.recentMessages), historyHasMore: full.historyHasMore };
+        state.thread = { ...full, ...state.thread, messages: mergeRecentMessages(state.mode === 'gpt' ? mergeRecentMessages(state.gptHistory, full.messages || []) : full.messages || [], state.recentMessages), historyHasMore: full.historyHasMore };
+        if (state.mode === 'gpt' && data.page && !state.gptHistory.length) state.gptPage = data.page;
+        refreshHistoryControl();
         renderConversation(state.thread.messages, isRunning(state.thread));
         rememberSnapshot({ thread: state.thread, approvals: [] });
       } else if (data.detailsRevision) state.loadedDetailsRevision = data.detailsRevision;
@@ -483,6 +564,31 @@
         state.lastApprovals = approvalKey;
         renderApprovals(approvals);
       }
+      refreshComposerControls();
+      refreshHistoryControl();
+  }
+  function refreshHistoryControl() {
+    const visible = state.mode === 'gpt' && state.activeId && state.gptPage?.hasMore && state.gptPage?.nextCursor;
+    hidden('load-gpt-history', !visible);
+    const atLimit = (state.thread?.messages?.length || 0) >= 400;
+    $('load-gpt-history').disabled = Boolean(state.gptHistoryBusy || atLimit);
+    $('load-gpt-history').textContent = state.gptHistoryBusy ? '正在读取更早消息…' : atLimit ? '已显示 400 条消息，更早内容请在电脑查看' : '加载更早消息';
+  }
+  async function loadGptHistory() {
+    if (state.mode !== 'gpt' || !state.activeId || state.gptHistoryBusy || !state.gptPage?.nextCursor || state.sending || (state.thread?.messages?.length || 0) >= 400) return;
+    const request = { id: state.activeId, generation: state.conversationGeneration, revision: state.readRevision, identity: state.role + ':' + state.csrf, controller: new AbortController() };
+    const cursor = state.gptPage.nextCursor;
+    state.gptHistoryBusy = request; refreshHistoryControl();
+    try {
+      const data = await api(threadApi(request.id) + '?stage=full&cursor=' + encodeURIComponent(cursor), { signal: request.controller.signal });
+      if (!readStillCurrent(request)) return;
+      state.gptHistory = mergeRecentMessages(data.thread?.messages || [], state.gptHistory);
+      state.thread = { ...state.thread, messages: mergeRecentMessages(state.gptHistory, state.thread.messages || []) };
+      state.gptPage = { ...data.page, hasMore: Boolean(data.page?.hasMore && data.page?.nextCursor && data.page.nextCursor !== cursor) };
+      renderConversation(state.thread.messages, isRunning(state.thread));
+      rememberSnapshot({ thread: state.thread, approvals: [] });
+    } catch (error) { if (readStillCurrent(request) && error.name !== 'AbortError') showError(error); }
+    finally { if (state.gptHistoryBusy === request) state.gptHistoryBusy = null; refreshHistoryControl(); }
   }
   function showSubmissionWarning(thread) {
     const warning = thread?.submissionWarning || '';
@@ -493,13 +599,13 @@
     const visible = [...messages];
     const matched = new Set();
     for (const [key, outgoing] of state.outgoing) {
-      const belongs = outgoing.threadId ? outgoing.threadId === state.activeId : !state.activeId && outgoing.viewGeneration === state.conversationGeneration;
+      const belongs = (outgoing.mode || 'codex') === state.mode && (outgoing.threadId ? outgoing.threadId === state.activeId : !state.activeId && outgoing.viewGeneration === state.conversationGeneration);
       if (!belongs) continue;
       // A later authenticated read can resolve an ambiguous network response.
       // Existing identical prompts are excluded, so repeated instructions remain distinct.
-      const synced = outgoing.delivery === 'uncertain' && messages.find(message => message.role === 'user' && message.submitted && messageText(message) === outgoing.text && !outgoing.baselineIds.has(message.id) && !matched.has(message.id));
+      const synced = outgoing.delivery === 'uncertain' && messages.find(message => message.role === 'user' && message.submitted && messageText(message) === outgoing.text && !outgoing.baselineIds.has(message.id) && !matched.has(message.id) && (!outgoing.attachments?.length || outgoing.attachments.every(attachment => message.attachments?.some(item => item.id === attachment.id))));
       if (synced) { matched.add(synced.id); state.outgoing.delete(key); continue; }
-      visible.push({ id: outgoing.id, role: 'user', text: outgoing.text, createdAt: outgoing.createdAt, delivery: outgoing.delivery });
+      visible.push({ id: outgoing.id, role: 'user', text: outgoing.text, attachments: outgoing.attachments || [], createdAt: outgoing.createdAt, delivery: outgoing.delivery });
     }
     const key = state.activeId || 'new';
     const scroll = $('conversation-scroll');
@@ -616,15 +722,57 @@
         link.href = reference.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
         element.append(link);
       } else {
-        const button = node('button', 'message-file-link', label);
-        button.type = 'button'; button.title = '预览或下载：' + reference.reference;
-        button.dataset.fileReference = reference.reference;
-        button.addEventListener('click', () => openMessageFile(reference.reference, context, button));
-        element.append(button);
+        element.append(messageFileCard(reference.reference, label, context));
       }
       cursor = end;
     }
     element.append(document.createTextNode(content.slice(cursor)));
+  }
+  function messageFileCard(reference, label, context) {
+    let name = reference.replace(/#L\d+.*$/, '').replace(/:\d+(?::\d+)?$/, '').replaceAll('\\', '/').split('/').at(-1) || label;
+    try { name = decodeURIComponent(name); } catch {}
+    const type = window.CodexRich?.fileType(name) || 'FILE';
+    const button = node('button', 'message-file-link message-file-card'); button.type = 'button'; button.title = '预览或下载：' + reference;
+    button.dataset.fileReference = reference; button.setAttribute('aria-label', label);
+    const glyph = node('span', 'attachment-glyph', type); glyph.dataset.type = type;
+    const info = node('span', 'attachment-info'); info.append(node('strong', '', label));
+    info.append(node('small', '', label === name ? '预览 / 下载' : name));
+    button.append(glyph, info); button.addEventListener('click', () => openMessageFile(reference, context, button)); return button;
+  }
+  function richMessageContent(element, value, context) {
+    if (!window.CodexRich || !/(?:^|\n)\s*(?:#{1,6}\s|[-*+]\s|\d+\.\s|>|\|)|\*\*|__|`[^`]+`|```|\$[^$\n]+\$|\\[([]|\[[^\]]+\]\(/.test(value)) { renderMessageContent(element, value, context); return; }
+    window.CodexRich.render(element, value, {
+      text: (target, text) => renderMessageContent(target, text, context),
+      link: (target, label) => {
+        const reference = messageReference(target, context);
+        if (!reference) return null;
+        if (reference.kind === 'external') { const link = node('a', 'message-external-link', label); link.href = reference.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link; }
+        return messageFileCard(reference.reference, label, context);
+      },
+    });
+  }
+  function publicDisplayText(value) {
+    // Only known opaque assistant citation markers are presentation metadata.
+    // User text, code and quoted examples keep their exact original characters.
+    return String(value).split(/(```[\s\S]*?(?:```|$)|`[^`\r\n]*`)/).map((part, index) => index % 2 ? part : part.replace(/(^[ \t]*>.*$)|\uE200(?:cite|filecite)\uE202(?:turn[\w.-]+(?:\uE202|[ ,])?)+\uE201/gm, (match, quoted) => quoted || '')).join('');
+  }
+  async function previewAttachment(attachment) {
+    const url = window.CodexRich?.safeUrl(attachment.previewUrl), download = window.CodexRich?.safeUrl(attachment.downloadUrl);
+    if (!url || !['owner', 'controller'].includes(state.role)) return;
+    const revision = state.sessionRevision, generation = ++previewGeneration;
+    $('preview-title').textContent = attachment.name || '附件预览'; $('preview-content').replaceChildren(node('p', '', '正在加载…'));
+    if (download) { $('preview-download').href = download; $('preview-download').download = attachment.name || ''; } else $('preview-download').removeAttribute('href');
+    if (!$('preview-dialog').open) $('preview-dialog').showModal();
+    const current = () => revision === state.sessionRevision && generation === previewGeneration;
+    if (/^image\/(?:png|jpeg|gif|webp|avif|bmp)$/i.test(attachment.mime || '')) {
+      const img = node('img', 'file-image'); img.alt = attachment.name || '图片'; img.src = url;
+      img.addEventListener('error', () => { if (current()) $('preview-content').replaceChildren(node('p', '', '图片暂不可用，可能已移动或不在授权项目内。请在电脑检查原文件。')); });
+      $('preview-content').replaceChildren(img); return;
+    }
+    if (/^(?:text\/|application\/(?:json|xml))/.test(attachment.mime || '') && attachment.size <= 1048576) {
+      try { const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' }); if (!response.ok) throw new Error('预览暂不可用'); const text = await response.text(); if (current()) $('preview-content').replaceChildren(node('pre', 'file-text', text.slice(0, 1048576))); }
+      catch (error) { if (current()) $('preview-content').replaceChildren(node('p', '', error.message)); }
+    } else $('preview-content').replaceChildren(node('p', '', '请下载原文件，在对应应用中打开。'));
   }
   let messageFileRequest = 0;
   async function openMessageFile(reference, context, button) {
@@ -656,7 +804,7 @@
     return 'assistant';
   }
   function processGroupKey(group, claimed) {
-    const thread = state.activeId || `new:${state.conversationGeneration}`;
+    const thread = state.mode + ':' + (state.activeId || `new:${state.conversationGeneration}`);
     const canonical = JSON.stringify([thread, group.turnId ? ['turn', group.turnId] : ['round', group.anchor]]);
     const aliases = [canonical, ...group.records.map(record => JSON.stringify([thread, 'process-item', record.item.id || ['position', record.index, record.item.type || record.role]])), JSON.stringify([thread, 'boundary', group.anchor])];
     const candidates = aliases.map(alias => state.processGroupKeys.get(alias)).filter(Boolean);
@@ -685,9 +833,9 @@
       // The bridge only supplies public records. Never render raw internal reasoning if a future source includes it.
       if (/reasoning/i.test(String(item.type || '')) || item.role === 'reasoning' || item.phase === 'analysis') continue;
       const content = messageText(item);
-      if (!content && !item.deferred) continue;
+      if (!content && !item.deferred && !item.attachments?.length) continue;
       const role = publicMessageRole(item);
-      const record = { item, index, content: content || '执行记录', role, process: role === 'tool' || role === 'assistant' && item.phase === 'commentary' };
+      const record = { item, index, content: content || (item.deferred ? '执行记录' : ''), role, process: role === 'tool' || role === 'assistant' && item.phase === 'commentary' };
       if (role === 'user') startSegment(['user', item.id || index], item.turnId || null);
       if (record.process) { record.segment = segment; segment.records.push(record); }
       entries.push(record);
@@ -751,24 +899,25 @@
     if (item.phase) article.dataset.phase = item.phase;
     article.append(node('div', 'message-avatar', role === 'user' ? '我' : role === 'tool' ? '⌘' : 'C'));
     const body = node('div', 'message-body');
-    const heading = node('div', 'message-name', role === 'user' ? '你' : role === 'tool' ? item.title || '执行记录' : 'Codex');
-    if (item.createdAt) heading.append(node('time', '', dateLabel(item.createdAt)));
+    const heading = node('div', 'message-name', role === 'user' ? '' : role === 'tool' ? item.title || '执行记录' : state.mode === 'gpt' ? 'GPT' : 'Codex');
+    if (item.createdAt && role !== 'user') heading.append(node('time', '', dateLabel(item.createdAt)));
     const delivery = role === 'user' && ({ sending: '发送中…', failed: '发送失败', uncertain: '结果未确认', sent: '已发送' })[item.delivery];
     if (delivery) {
       const label = node('span', 'message-delivery', delivery); label.dataset.status = item.delivery; heading.append(label);
     }
-    body.append(heading);
+    if (role !== 'user') body.append(heading);
     const context = { threadId: state.activeId, cwd: state.thread?.cwd };
     const contentNode = () => {
-      const pre = node('pre', 'message-content');
+      const pre = node(role === 'tool' ? 'pre' : 'div', 'message-content');
       if (item.deferred) pre.textContent = '正在加载执行记录…';
-      else renderMessageContent(pre, content, context);
+      else if (role === 'tool') renderMessageContent(pre, content, context);
+      else richMessageContent(pre, role === 'assistant' ? publicDisplayText(content) : content, context);
       return pre;
     };
     if (role === 'tool') {
       const detail = node('details', 'message-disclosure');
       detail.dataset.messageId = item.id || '';
-      retainDisclosure(detail, JSON.stringify([state.activeId, 'tool', item.id ? ['id', item.id] : ['position', item.turnId || '', item.type || role, index]]));
+      retainDisclosure(detail, JSON.stringify([state.mode + ':' + state.activeId, 'tool', item.id ? ['id', item.id] : ['position', item.turnId || '', item.type || role, index]]));
       detail.append(node('summary', '', item.title || String(content).split('\n')[0].slice(0, 100)));
       const reveal = () => {
         if (detail.open && !detail.querySelector('.message-content')) detail.append(contentNode());
@@ -777,13 +926,19 @@
       detail.addEventListener('toggle', reveal);
       reveal();
       body.append(detail);
-    } else body.append(contentNode());
+    } else if (content) body.append(contentNode());
+    if (window.CodexRich && item.attachments?.length) {
+      const cards = node('div', 'message-attachments');
+      for (const attachment of item.attachments.slice(0, 8)) cards.append(window.CodexRich.card(attachment, previewAttachment));
+      body.append(cards);
+    }
+    if (role === 'user' && heading.childNodes.length) body.append(heading);
     article.append(body);
     return article;
   }
   function recordSignature(record) {
     const { item, content, role } = record;
-    return [content, role, item.phase, item.title, item.createdAt, item.delivery, item.deferred, item.turnId, item.type, state.thread?.cwd];
+    return [content, role, item.phase, item.title, item.createdAt, item.delivery, item.deferred, item.turnId, item.type, state.thread?.cwd, JSON.stringify(item.attachments || [])];
   }
   function recordNode(record, cache) {
     const key = messageIdentity(record.item, record.index), signature = recordSignature(record);
@@ -931,63 +1086,133 @@
     event.preventDefault();
     const originalInput = $('prompt').value;
     const prompt = originalInput.trim();
-    if (!prompt || state.sending || state.activeReadOnly) return;
+    if ((!prompt && !state.attachmentDrafts.length) || state.sending || state.activeReadOnly || state.pendingCreation || state.mode === 'gpt' && !state.activeId) return;
+    if (state.mode === 'gpt' && isRunning(state.thread)) { toast('请等待 GPT 回复完成后再发送'); return; }
     const threadId = state.activeId;
     const generation = state.conversationGeneration;
     const session = state.sessionRevision;
+    const mode = state.mode, drafts = [...state.attachmentDrafts], nativeProjectId = state.nativeProjectId;
+    const action = isRunning(state.thread) ? $('send-behavior').value : 'steer';
     const outgoing = {
-      id: `pending-${Date.now()}-${++state.outgoingSequence}`, threadId,
-      viewGeneration: generation, text: prompt, createdAt: Date.now(), delivery: 'sending',
+      id: `pending-${Date.now()}-${++state.outgoingSequence}`, threadId, mode,
+      viewGeneration: generation, text: prompt, attachments: drafts.map(draft => draft.attachment || { id: draft.id, name: draft.file.name, size: draft.file.size, mime: draft.file.type, kind: draft.file.type.startsWith('image/') ? 'image' : 'file' }), createdAt: Date.now(), delivery: 'sending',
       baselineIds: new Set((state.thread?.messages || []).map(message => message.id)),
     };
     state.outgoing.set(outgoing.id, outgoing);
     while (state.outgoing.size > 40) state.outgoing.delete(state.outgoing.keys().next().value);
     const stillHere = () => state.conversationGeneration === generation && state.activeId === threadId;
     state.sending = true;
+    refreshComposerControls();
     stopConversationReads();
     state.readRevision++;
     $('send').disabled = true;
     hidden('error-banner', true);
     hidden('welcome', true);
     renderConversation(state.thread?.messages || [], isRunning(state.thread), true);
+    let submitted = false;
     try {
-      const data = threadId
-        ? await api(`/api/threads/${encodeURIComponent(threadId)}/messages`, { method: 'POST', body: { prompt, ...modelChoice() } })
-        : await api('/api/threads', { method: 'POST', body: { prompt, projectId: $('project-select').value || undefined, ...modelChoice() } });
+      const attachments = [];
+      for (const draft of drafts) { attachments.push(await uploadAttachment(draft, session)); if (!stillHere() || session !== state.sessionRevision) throw new Error('聊天已切换，附件没有发送。'); }
+      outgoing.attachments = attachments;
+      const body = mode === 'gpt' ? { prompt } : { prompt, ...modelChoice(), ...(attachments.length ? { attachmentIds: attachments.map(item => item.id) } : {}), ...(isRunning(state.thread) ? { action } : {}) };
+      submitted = true;
+      const data = nativeProjectId && !threadId
+        ? await api('/api/desktop/projects/' + encodeURIComponent(nativeProjectId) + '/threads', { method: 'POST', body })
+        : await api(threadApi(threadId, threadId ? '/messages' : ''), { method: 'POST', body: threadId || mode === 'gpt' ? body : { ...body, projectId: $('project-select').value || undefined } });
+      if (nativeProjectId && !threadId) {
+        outgoing.delivery = 'sent';
+        if (stillHere()) {
+          clearAttachmentDrafts(); $('prompt').value = ''; resizePrompt();
+          state.pendingCreation = true; $('thread-state').textContent = '已提交到桌面'; hidden('thread-state', false);
+          $('composer-hint').textContent = '聊天正在桌面创建。完成后从该项目列表打开；请勿重复发送。';
+          renderConversation([], false); await loadThreads(); await loadDesktopProjects();
+          if (data.threadId && state.threads.some(thread => thread.id === data.threadId)) await openThread(data.threadId);
+        }
+        return;
+      }
       const returnedId = data.thread?.id || data.threadId || data.id || threadId;
       if (!returnedId || !Array.isArray(data.thread?.messages)) throw new Error('指令已提交，但返回记录不完整。请刷新任务列表核对，不要重复发送。');
       const showResponse = stillHere();
       state.outgoing.delete(outgoing.id);
       state.readRevision++;
       if (showResponse) {
+        clearAttachmentDrafts();
         state.activeId = returnedId;
-        state.thread = data.thread;
+        state.thread = mode === 'gpt' && state.gptHistory.length ? { ...data.thread, messages: mergeRecentMessages(state.gptHistory, data.thread.messages) } : data.thread;
         state.recentMessages = data.thread.messages;
         state.recentRevision = ''; state.fullRevision = ''; state.loadedDetailsRevision = '';
-        rememberSnapshot({ thread: data.thread, approvals: [] });
+        rememberSnapshot({ thread: state.thread, approvals: [] });
         showSubmissionWarning(data.thread);
         state.activeReadOnly = Boolean(data.thread.readOnly || data.thread.controllable === false);
         // Render the accepted POST body immediately; a poll that began before
         // this response must not erase the just-submitted user message.
-        renderConversation(data.thread.messages, isRunning(data.thread), true);
+        renderConversation(state.thread.messages, isRunning(data.thread), true);
         if ($('prompt').value === originalInput) { $('prompt').value = ''; resizePrompt(); }
         renderThreads();
         await loadThread(true);
       }
       await loadThreads();
     } catch (error) {
-      outgoing.delivery = error.status >= 400 && error.status < 500 && error.status !== 408 ? 'failed' : 'uncertain';
+      outgoing.delivery = !submitted || error.status >= 400 && error.status < 500 && error.status !== 408 ? 'failed' : 'uncertain';
       if (stillHere()) {
         showError(error);
         renderConversation(state.thread?.messages || [], isRunning(state.thread), true);
       }
     } finally {
       state.sending = false; $('send').disabled = state.activeReadOnly;
+      refreshComposerControls(); renderAttachmentDrafts();
       if (session === state.sessionRevision && generation === state.conversationGeneration) {
         scheduleThreadPoll();
         if (state.progressive) scheduleDetails();
       }
     }
+  }
+  function clearAttachmentDrafts() {
+    for (const request of state.uploadRequests) request.abort(); state.uploadRequests.clear();
+    for (const draft of state.attachmentDrafts) if (draft.url) URL.revokeObjectURL(draft.url);
+    state.attachmentDrafts = [];
+    if ($('attachment-input')) $('attachment-input').value = '';
+    if ($('attachment-drafts')) $('attachment-drafts').replaceChildren();
+  }
+  function renderAttachmentDrafts() {
+    const list = $('attachment-drafts'); list.replaceChildren();
+    for (const draft of state.attachmentDrafts) {
+      const card = node('div', 'attachment-draft'); card.dataset.draftId = draft.id;
+      if (draft.url) { const img = node('img'); img.src = draft.url; img.alt = ''; card.append(img); } else card.append(node('span', 'attachment-glyph', '▤'));
+      const info = node('div', 'attachment-info'); info.append(node('strong', '', draft.file.name), node('small', '', draft.error || (draft.progress === null ? formatBytes(draft.file.size) : draft.progress < 100 ? `上传中 ${draft.progress}%` : '上传完成')));
+      if (draft.progress !== null) { const progress = node('progress'); progress.max = 100; progress.value = draft.progress; progress.setAttribute('aria-label', draft.file.name + ' 上传进度'); info.append(progress); }
+      const remove = node('button', 'icon-button', '×'); remove.type = 'button'; remove.disabled = state.sending; remove.setAttribute('aria-label', '移除 ' + draft.file.name);
+      remove.addEventListener('click', () => { if (draft.url) URL.revokeObjectURL(draft.url); state.attachmentDrafts = state.attachmentDrafts.filter(item => item !== draft); renderAttachmentDrafts(); });
+      card.append(info, remove); list.append(card);
+    }
+  }
+  function selectAttachments(files) {
+    if (!['owner', 'controller'].includes(state.role) || state.mode === 'gpt' || state.sending || state.activeReadOnly || !state.bootstrap?.features?.attachments) return;
+    for (const file of files) {
+      if (state.attachmentDrafts.length >= 8) { toast('每条消息最多添加 8 个附件'); break; }
+      if (file.size > 25 * 1024 * 1024) { toast(file.name + ' 超过 25 MB，未添加'); continue; }
+      state.attachmentDrafts.push({ id: 'draft-' + ++state.attachmentSequence, file, url: /^image\/(?:png|jpeg|gif|webp|avif|bmp)$/.test(file.type) ? URL.createObjectURL(file) : null, progress: null, attachment: null, error: '' });
+    }
+    $('attachment-input').value = ''; renderAttachmentDrafts();
+  }
+  function uploadAttachment(draft, session) {
+    if (draft.attachment) return Promise.resolve(draft.attachment);
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest(); state.uploadRequests.add(request); draft.progress = 0; draft.error = ''; renderAttachmentDrafts();
+      const fail = message => { draft.error = message; state.uploadRequests.delete(request); renderAttachmentDrafts(); reject(new Error(message)); };
+      request.open('POST', '/api/attachments'); request.timeout = 120000;
+      request.setRequestHeader('Content-Type', 'application/octet-stream'); request.setRequestHeader('X-CSRF-Token', state.csrf); request.setRequestHeader('X-File-Name', encodeURIComponent(draft.file.name));
+      request.upload.onprogress = event => { if (session === state.sessionRevision && event.lengthComputable) { draft.progress = Math.round(event.loaded / event.total * 100); renderAttachmentDrafts(); } };
+      request.onload = () => {
+        state.uploadRequests.delete(request);
+        if (session !== state.sessionRevision) { fail('设备连接已变化，请重新选择附件'); return; }
+        let data; try { data = JSON.parse(request.responseText); } catch { fail('上传响应不可用'); return; }
+        if (request.status < 200 || request.status >= 300 || typeof data.attachment?.id !== 'string') { fail(data.error || '附件上传失败'); return; }
+        draft.attachment = data.attachment; draft.progress = 100; renderAttachmentDrafts(); resolve(draft.attachment);
+      };
+      request.onerror = () => fail('附件上传失败，请检查连接后重试'); request.ontimeout = () => fail('附件上传超时，请重试'); request.onabort = () => fail('附件上传已取消');
+      request.send(draft.file);
+    });
   }
   async function stopTurn() {
     if (!state.activeId) return;
@@ -1011,11 +1236,13 @@
     if (!state.activeId) $('active-model').textContent = [model?.displayName || 'Codex 默认模型', $('effort-select').value].filter(Boolean).join(' · ');
   }
   async function loadModels() {
+    if (state.mode === 'gpt') return;
     if (state.modelsBusy) return;
     state.modelsBusy = true;
     try {
       const previous = $('model-select').value;
       const data = await api('/api/models'); state.models = data.models || [];
+      if (state.mode !== 'codex') return;
       $('model-select').replaceChildren(new Option('沿用默认 / 当前会话', ''), ...state.models.map(m => new Option(m.displayName || m.model, m.model)));
       $('model-select').value = state.models.some(m => m.model === previous) ? previous : '';
       renderEfforts();
@@ -1351,6 +1578,13 @@
   }
 
   $('pair-open').addEventListener('click', openPairDialog);
+  $('chat-mode-codex').addEventListener('click', () => changeChatMode('codex'));
+  $('chat-mode-gpt').addEventListener('click', () => changeChatMode('gpt'));
+  $('desktop-project-create').addEventListener('click', () => $('desktop-project-dialog').showModal());
+  $('desktop-project-close').addEventListener('click', () => $('desktop-project-dialog').close());
+  $('desktop-project-refresh').addEventListener('click', async () => { await loadDesktopProjects(); await loadThreads(); $('desktop-project-dialog').close(); });
+  $('attach-files').addEventListener('click', () => { if (!$('attach-files').disabled) $('attachment-input').click(); });
+  $('attachment-input').addEventListener('change', () => selectAttachments([...$('attachment-input').files]));
   $('reconnect').addEventListener('click', async () => {
     $('reconnect').disabled = true;
     try { await api('/api/reconnect', { method: 'POST', body: {} }); hidden('error-banner', true); state.lastStatus = ''; await bootstrap(); await loadThreads(); }
@@ -1399,7 +1633,8 @@
     catch (error) { $('files-error').textContent = error.message; }
   });
   $('mobile-new').addEventListener('click', resetConversation);
-  $('refresh-threads').addEventListener('click', async () => { await bootstrap(); state.lastThreads = ''; await loadThreads(); toast('任务列表已刷新'); });
+  $('refresh-threads').addEventListener('click', async () => { await bootstrap(); state.lastThreads = ''; await loadThreads(); await loadDesktopProjects(); toast('任务列表已刷新'); });
+  $('load-gpt-history').addEventListener('click', loadGptHistory);
   $('sidebar-open').addEventListener('click', () => $('workspace').classList.add('sidebar-open'));
   $('sidebar-close').addEventListener('click', closeSidebar);
   $('sidebar-shade').addEventListener('click', closeSidebar);

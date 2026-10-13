@@ -34,8 +34,9 @@ function unpack(result, allowText = false) {
 function messages(turns) {
   return retainMessages(turns.flatMap(turn => (turn.items || []).map((item, index) => {
     const identity = { id: item.id || `${turn.id || 'unknown'}:${item.type}:${index}`, turnId: turn.id || null };
-    if (item.type === 'userMessage') return { ...identity, role: 'user', text: (item.content || []).map(content => text(content.text) || (content.type === 'image' ? '[图片]' : '')).join('\n') };
+    if (item.type === 'userMessage') return { ...identity, role: 'user', text: (item.content || []).map(content => text(content.text) || (content.type === 'image' ? '[图片]' : '')).join('\n'), content: item.content || [] };
     if (item.type === 'agentMessage') return { ...identity, role: 'assistant', text: text(item.text), phase: item.phase };
+    if (item.type === 'imageGeneration' && typeof item.savedPath === 'string' && item.savedPath) return { ...identity, role: 'assistant', text: '生成的图片', phase: 'final_answer', generatedImage: { savedPath: item.savedPath } };
     if (item.type === 'commandExecution') return { ...identity, role: 'tool', text: clip(text(item.command) + '\n' + text(item.output || item.aggregatedOutput)), status: item.status };
     if (item.type === 'fileChange') return { ...identity, role: 'tool', text: '文件修改\n' + (item.changes || []).map(change => `${change.path}\n${clip(change.diff)}`).join('\n'), status: item.status };
     // Internal reasoning, context compaction, and sub-agent coordination are not chat messages.
@@ -100,12 +101,12 @@ export class DesktopTasks {
   definition(name) { return this.desktop?.tools?.find(tool => tool.name === name && (!tool.namespace || tool.namespace === 'codex_app')); }
 
   meta(kind, available = false) {
-    if (kind === 'companion') return { source: 'companion', native: false, control: 'companion', capabilities: { send: true, stop: true, fork: true, modelSelection: true, effortSelection: true, approvals: true } };
+    if (kind === 'companion') return { source: 'companion', native: false, control: 'companion', capabilities: { send: true, steer: true, stop: true, fork: true, modelSelection: true, effortSelection: true, approvals: true } };
     const send = available && this.desktop?.options?.allowWrites === true && Boolean(this.definition('send_message_to_thread'));
     const props = this.definition('send_message_to_thread')?.inputSchema?.properties || {};
     return {
       source: 'desktop', native: available, control: send ? 'native' : 'readOnly',
-      capabilities: { send, stop: false, fork: true, modelSelection: send && Boolean(props.model), effortSelection: send && Boolean(props.thinking), approvals: false },
+      capabilities: { send, steer: send, stop: false, fork: true, modelSelection: send && Boolean(props.model), effortSelection: send && Boolean(props.thinking), approvals: false },
       nativeHint: available ? '直接连接原生 Codex 的同一聊天。停止任务和操作审批请在桌面端处理。' : '原生连接当前不可用，已显示保存的只读历史。',
     };
   }
@@ -146,12 +147,12 @@ export class DesktopTasks {
     try { local = await this.tasks.list(); } catch (error) { localError = error; }
     const all = new Map(local.map(thread => [thread.id, this.decorate({ thread }, this.owned.has(thread.id) ? 'companion' : 'desktop').thread]));
     for (const thread of local) this.summaries.set(thread.id, thread);
-    const callerId = local[0]?.id || this.nativeCache.keys().next().value;
+    const callerId = this.desktop?.options?.callerThreadId || local[0]?.id || this.nativeCache.keys().next().value;
     try {
       for (const native of await this.nativeThreads(callerId)) {
         if (this.owned.has(native.id)) continue;
         const prior = all.get(native.id) || {};
-        const thread = { ...prior, id: native.id, title: native.title || prior.title || '未命名任务', cwd: native.cwd || prior.cwd, status: status(native.status), nativeStatus: rawStatus(native.status), updatedAt: timestamp(native.updatedAt) || prior.updatedAt || 0, model: native.model || prior.model || null, effort: native.reasoningEffort || prior.effort || null, hostId: 'local', projectId: native.projectId || null };
+        const thread = { ...prior, id: native.id, title: native.title || prior.title || '未命名任务', cwd: native.cwd || prior.cwd, status: status(native.status), nativeStatus: rawStatus(native.status), updatedAt: timestamp(native.updatedAt) || prior.updatedAt || 0, model: native.model || prior.model || null, effort: native.reasoningEffort || prior.effort || null, hostId: 'local', ...(Object.hasOwn(native, 'projectId') ? { projectId: native.projectId } : {}) };
         all.set(native.id, this.decorate({ thread }, 'desktop', true).thread);
         this.summaries.set(native.id, thread);
       }
@@ -218,6 +219,7 @@ export class DesktopTasks {
       status: status(data.thread.status, latest), nativeStatus: rawStatus(data.thread.status),
       turnId: latest?.status === 'inProgress' ? latest.id : null,
       model: data.thread.model || prior.model || null, effort: data.thread.reasoningEffort || prior.effort || null,
+      ...(Object.hasOwn(data.thread, 'projectId') ? { projectId: data.thread.projectId } : Object.hasOwn(prior, 'projectId') ? { projectId: prior.projectId } : {}),
       messages: retainMessages(combined), updatedAt: timestamp(data.thread.updatedAt) || prior.updatedAt || 0, readAt: snapshot.readAt,
       error: latest?.error?.message || null, hostId: 'local', historyHasMore: Boolean(data.page?.hasMore),
     };
@@ -277,6 +279,7 @@ export class DesktopTasks {
         const advertised = this.definition('send_message_to_thread')?.inputSchema?.properties?.thinking?.enum;
         if (args.thinking && Array.isArray(advertised) && !advertised.includes(args.thinking)) throw new AccessError(400, '原生桌面接口不支持所选推理强度。');
       }
+      if (typeof options.beforeWrite === 'function') options.beforeWrite();
       attempted = true;
       const acknowledgement = unpack(await this.desktop.call('send_message_to_thread', args, { callerThreadId: id, hostId: 'local' }), true);
       if (acknowledgement.accepted === false) throw new Error('桌面没有接受该指令。');
@@ -296,8 +299,8 @@ export class DesktopTasks {
     } finally { this.locks.delete(id); }
   }
 
-  async stop(id) {
-    if (this.owned.has(id)) return this.tasks.stop(id);
+  async stop(id, options = {}) {
+    if (this.owned.has(id)) return this.tasks.stop(id, options);
     throw new AccessError(409, '当前原生桌面接口不支持停止任务，请回到 Codex 桌面点击停止。');
   }
 }

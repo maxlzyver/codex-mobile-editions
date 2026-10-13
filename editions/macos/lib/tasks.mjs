@@ -47,8 +47,9 @@ export function stageView(view, stage = 'full', detailsRevision = viewRevision(v
 }
 function message(item, turnId = null, index = 0) {
   const identity = { id: item.id || `${turnId || 'unknown'}:${item.type}:${index}`, turnId };
-  if (item.type === 'userMessage') return { ...identity, role: 'user', text: (item.content || []).map(c => c.text || (c.type === 'image' ? '[图片]' : '')).join('\n') };
+  if (item.type === 'userMessage') return { ...identity, role: 'user', content: item.content, text: (item.content || []).map(c => c.text || (c.type === 'image' ? '[图片]' : '')).join('\n') };
   if (item.type === 'agentMessage') return { ...identity, role: 'assistant', text: item.text || '', phase: item.phase };
+  if (item.type === 'imageGeneration' && typeof item.savedPath === 'string' && item.savedPath) return { ...identity, role: 'assistant', text: '生成的图片', phase: 'final_answer', generatedImage: { savedPath: item.savedPath } };
   if (item.type === 'commandExecution') return { ...identity, role: 'tool', text: clip((item.command || '') + '\n' + (item.aggregatedOutput || '')), status: item.status };
   if (item.type === 'fileChange') return { ...identity, role: 'tool', text: '文件修改\n' + (item.changes || []).map(c => `${c.path}\n${clip(c.diff)}`).join('\n'), status: item.status };
   return null;
@@ -94,6 +95,7 @@ export class Tasks {
     const data = new Map(this.listCache.map(t => [t.id, {
       id: t.id, title: this.owned.get(t.id)?.title || t.name || t.preview || '未命名任务', updatedAt: (t.updatedAt || t.createdAt || 0) * 1000,
       status: active(t.status) ? 'running' : 'idle', readOnly: !this.owned.has(t.id), cwd: t.cwd,
+      ...(Object.hasOwn(t, 'projectId') ? { projectId: typeof t.projectId === 'string' ? t.projectId : null } : {}),
       model: t.model || this.owned.get(t.id)?.model || null, effort: t.reasoningEffort || this.owned.get(t.id)?.effort || null,
       forkedFromId: t.forkedFromId || this.owned.get(t.id)?.forkedFromId || null,
     }]));
@@ -121,7 +123,7 @@ export class Tasks {
     const latest = thread.turns?.at(-1);
     const owned = this.owned.get(thread.id);
     const messages = (thread.turns || []).flatMap(turn => (turn.items || []).map((item, index) => message(item, turn.id, index)).filter(Boolean));
-    return { id: thread.id, title: owned?.title || thread.name || thread.preview || '未命名任务', cwd: thread.cwd, messages: retainMessages(messages), status: active(thread.status) || latest?.status === 'inProgress' ? 'running' : latest?.status === 'failed' ? 'error' : 'idle', turnId: latest?.status === 'inProgress' ? latest.id : null, updatedAt: (thread.updatedAt || 0) * 1000, readAt: Date.now(), error: latest?.error?.message || null, model: thread.model || owned?.model || null, effort: thread.reasoningEffort || owned?.effort || null, forkedFromId: thread.forkedFromId || owned?.forkedFromId || null };
+    return { id: thread.id, title: owned?.title || thread.name || thread.preview || '未命名任务', cwd: thread.cwd, ...(Object.hasOwn(thread, 'projectId') ? { projectId: typeof thread.projectId === 'string' ? thread.projectId : null } : {}), messages: retainMessages(messages), status: active(thread.status) || latest?.status === 'inProgress' ? 'running' : latest?.status === 'failed' ? 'error' : 'idle', turnId: latest?.status === 'inProgress' ? latest.id : null, updatedAt: (thread.updatedAt || 0) * 1000, readAt: Date.now(), error: latest?.error?.message || null, model: thread.model || owned?.model || null, effort: thread.reasoningEffort || owned?.effort || null, forkedFromId: thread.forkedFromId || owned?.forkedFromId || null };
   }
   async get(id, options = {}) {
     await this.ready();
@@ -143,7 +145,7 @@ export class Tasks {
   view(t) {
     const owned = this.owned.has(t.id);
     return { thread: { ...t, messages: this.submitted.merge(t.id, t.messages, retainMessages), readOnly: !owned,
-      capabilities: { send: owned, stop: owned, approvals: owned, modelSelection: owned, effortSelection: owned, fork: true },
+      capabilities: { send: owned, stop: owned, steer: owned, attachments: owned, approvals: owned, modelSelection: owned, effortSelection: owned, fork: true },
       ...(this.submitted.warning ? { submissionWarning: this.submitted.warning } : {}) }, approvals: [...this.approvals.values()].filter(a => a.threadId === t.id).map(({ rpcId, ...a }) => a) };
   }
   items(t, turn) {
@@ -166,6 +168,7 @@ export class Tasks {
     try { cwd = realpathSync(cwd); if (!statSync(cwd).isDirectory()) throw new Error(); } catch { throw new AccessError(400, '工作目录不存在。'); }
     await this.ready();
     const selected = await this.models.resolve(options);
+    options.beforeWrite?.();
     const result = await this.bridge.request('thread/start', { cwd, approvalPolicy: 'on-request', sandbox: 'workspace-write', experimentalRawEvents: false, allowProviderModelFallback: false, ...selectionConfig(selected) });
     const { thread } = result;
     const entry = { title: prompt.slice(0, 70), cwd, updatedAt: Date.now(), model: result.model || thread.model || selected.model, effort: result.reasoningEffort || thread.reasoningEffort || selected.effort };
@@ -174,7 +177,7 @@ export class Tasks {
     this.loaded.add(thread.id);
     this.cache.set(thread.id, { id: thread.id, ...entry, messages: [], status: 'idle', readAt: Date.now() });
     this.listTime = 0;
-    try { return await this.send(thread.id, prompt, selected); } catch (error) { error.threadId = thread.id; throw error; }
+    try { return await this.send(thread.id, prompt, { ...selected, localImages: options.localImages, beforeWrite: options.beforeWrite }); } catch (error) { error.threadId = thread.id; throw error; }
   }
   async fork(id, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) throw new AccessError(400, '无效的接续设置。');
@@ -182,6 +185,7 @@ export class Tasks {
     await this.ready();
     const { thread: source } = await this.bridge.request('thread/read', { threadId: id, includeTurns: false });
     const selected = await this.models.resolve(options, { model: source.model, effort: source.reasoningEffort });
+    options.beforeWrite?.();
     const result = await this.bridge.request('thread/fork', { threadId: id, approvalPolicy: 'on-request', sandbox: 'workspace-write', excludeTurns: false, deferGoalContinuation: true, ...selectionConfig(selected) });
     const { thread } = result;
     if (!thread?.id || thread.id === id) throw new AccessError(502, 'Codex 没有返回独立的新会话，原会话保持不变。');
@@ -192,7 +196,7 @@ export class Tasks {
     this.cache.set(thread.id, { ...this.hydrate({ ...thread, cwd: entry.cwd }), ...entry, status: 'idle', turnId: null, error: null });
     this.listTime = 0;
     if (prompt) {
-      try { return await this.send(thread.id, prompt, selected); } catch (error) { error.threadId = thread.id; throw error; }
+      try { return await this.send(thread.id, prompt, { ...selected, beforeWrite: options.beforeWrite }); } catch (error) { error.threadId = thread.id; throw error; }
     }
     return this.get(thread.id);
   }
@@ -212,19 +216,22 @@ export class Tasks {
         throw new AccessError(409, '当前任务正在运行，调整模型或推理强度需等待当前轮次结束，或先停止任务。');
       }
       if (!this.loaded.has(id)) {
+        options.beforeWrite?.();
         await this.bridge.request('thread/resume', { threadId: id, approvalPolicy: 'on-request', sandbox: 'workspace-write', ...selectionConfig(selected) });
         this.loaded.add(id);
       }
       const receipt = this.submitted.begin(id, prompt, t.messages, t.status === 'running' ? t.turnId : null);
+      const input = [{ type: 'text', text: prompt, text_elements: [] }, ...(options.localImages || []).map(filename => ({ type: 'localImage', path: filename }))];
+      options.beforeWrite?.();
       if (t.status === 'running' && t.turnId) {
-        const result = await this.bridge.request('turn/steer', { threadId: id, expectedTurnId: t.turnId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
+        const result = await this.bridge.request('turn/steer', { threadId: id, expectedTurnId: t.turnId, input });
         this.submitted.accept(receipt, result.turnId || t.turnId);
       } else {
         startingTurn = true;
         t.status = 'running';
         t.error = null;
         t.turnId = null;
-        const { turn } = await this.bridge.request('turn/start', { threadId: id, input: [{ type: 'text', text: prompt, text_elements: [] }], model: selected.model, ...(selected.effort ? { effort: selected.effort } : {}) });
+        const { turn } = await this.bridge.request('turn/start', { threadId: id, input, model: selected.model, ...(selected.effort ? { effort: selected.effort } : {}) });
         this.submitted.accept(receipt, turn.id);
         this.items(t, turn);
         t.model = selected.model;
@@ -247,7 +254,7 @@ export class Tasks {
       throw e;
     } finally { this.locks.delete(id); }
   }
-  async stop(id) {
+  async stop(id, options = {}) {
     if (!this.owned.has(id)) throw new AccessError(403, '只能停止本控制台发起的任务。');
     if (this.stopLocks.has(id)) throw new AccessError(409, '此任务已在请求停止，请稍候刷新。');
     this.stopLocks.add(id);
@@ -256,6 +263,7 @@ export class Tasks {
       const t = this.cache.get(id);
       if ((this.locks.has(id) || t?.status === 'running') && !t?.turnId) throw new AccessError(409, '此任务正在启动，尚未取得可停止的轮次，请稍候刷新后再试。');
       if (t?.status !== 'running' || !t.turnId) throw new AccessError(409, '此任务当前没有可停止的运行轮次，请刷新状态。');
+      options.beforeWrite?.();
       await this.bridge.request('turn/interrupt', { threadId: id, turnId: t.turnId });
       return { ok: true, requested: true };
     } finally { this.stopLocks.delete(id); }

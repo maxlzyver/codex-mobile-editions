@@ -1,8 +1,8 @@
-# Third-party components — Windows 10 专用版 V1.0
+# Third-party components — Windows 10 专用版 V1.2.0
 
-Application: Codex 移动助手 · Windows 10 专用版, version 1.0.0.
+Application: Codex 移动助手 · Windows 10 专用版, version 1.2.0.
 Author: maxlzyver. Repository: https://github.com/maxlzyver/codex-mobile-editions.
-Edition directory: editions/windows10. Portable archive: codex-mobile-windows10-1.0.0-x64.zip.
+Edition directory: editions/windows10. Portable archive: codex-mobile-windows10-1.2.0-x64.zip.
 
 This is an independent companion application, not an official OpenAI client.
 The application code is distributed under the MIT license in LICENSE.
@@ -15,6 +15,8 @@ Codex build is implied by this edition's Windows platform target.
 | Node.js, Windows x64 | 24.19.0 | MIT with included dependency notices | https://nodejs.org/dist/v24.19.0/ ; runtime/LICENSE |
 | cloudflared, Windows x64 | 2026.10.0 | Apache-2.0 | https://github.com/cloudflare/cloudflared ; vendor/cloudflared-LICENSE.txt |
 | qrcode-generator | 1.4.4 | MIT | https://www.npmjs.com/package/qrcode-generator/v/1.4.4 ; vendor/qrcode-LICENSE.txt |
+| marked | 18.1.1 | MIT | https://github.com/markedjs/marked ; public/vendor/marked-LICENSE.txt |
+| KaTeX | 0.19.0 | MIT | https://github.com/KaTeX/KaTeX ; public/vendor/katex-LICENSE.txt |
 
 Node.js was verified against the official SHASUMS256.txt when preparing the
 runtime. cloudflared is verified against the SHA256 digest in its official

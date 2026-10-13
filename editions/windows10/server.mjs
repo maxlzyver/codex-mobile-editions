@@ -13,6 +13,9 @@ import { Projects } from './lib/files.mjs';
 import { MobilePermissions } from './lib/permissions.mjs';
 import { DesktopBridge } from './lib/desktop-bridge.mjs';
 import { DesktopTasks } from './lib/desktop-tasks.mjs';
+import { Attachments } from './lib/attachments.mjs';
+import { DesktopProjects } from './lib/desktop-projects.mjs';
+import { NativeGPT } from './lib/native-gpt.mjs';
 import { APP_INFO } from './lib/app-info.mjs';
 import { UpdateManager } from './lib/updater.mjs';
 import { createInstaller } from './lib/update-installer.mjs';
@@ -21,7 +24,7 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const qrcode = require('./vendor/qrcode.cjs');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
-const ASSETS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/settings.js', '/settings.css', '/support-wechat.jpg', '/icon.svg', '/app-icon.png', '/app-icon-192.png', '/app-icon-512.png', '/apple-touch-icon.png', '/favicon.ico', '/manifest.webmanifest']);
+const ASSETS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/settings.js', '/settings.css', '/support-wechat.jpg', '/icon.svg', '/app-icon.png', '/app-icon-192.png', '/app-icon-512.png', '/apple-touch-icon.png', '/favicon.ico', '/manifest.webmanifest', '/rich-content.js', '/vendor/marked.js', '/vendor/katex.js']);
 
 export function lanAddresses(port) {
   return Object.values(os.networkInterfaces()).flat().filter(v => v && v.family === 'IPv4' && !v.internal && !v.address.startsWith('169.254.') && !v.address.startsWith('198.18.') && !v.address.startsWith('198.19.')).map(v => `http://${v.address}:${port}`).sort((a, b) => Number(a.includes('192.168.137.')) - Number(b.includes('192.168.137.')));
@@ -40,6 +43,10 @@ export async function createConsole(options = {}) {
   const tasks = desktop ? new DesktopTasks(companionTasks, desktop) : companionTasks;
   const defaultCwd = tasks.defaultCwd;
   const projects = new Projects({ tasks, defaultCwd, runtimeDir: runtime, protectedPaths: [path.join(ROOT, '.runtime')] });
+  const attachments = new Attachments({ runtimeDir: runtime, projects });
+  const desktopProjects = desktop ? new DesktopProjects(tasks) : null;
+  const nativeGpt = desktopProjects ? new NativeGPT(desktopProjects) : null;
+  const sendLocks = new Set();
   let port = options.port ?? Number(process.env.CODEX_MOBILE_PORT || 43127);
   let tunnel;
   let closing = false;
@@ -60,6 +67,7 @@ export async function createConsole(options = {}) {
         if (!active(cached)) continue;
         if (tasks.owned.has(cached.id) || active((await tasks.get(cached.id)).thread)) return true;
       }
+      if (await nativeGpt?.isBusy()) return true;
       return Boolean(taskRequests || companionTasks.approvals.size);
     } catch { return true; }
   }
@@ -100,6 +108,32 @@ export async function createConsole(options = {}) {
     if (!session || !['owner', 'controller'].includes(session.role)) throw new AccessError(401, '请先扫描电脑上的二维码并在电脑端确认连接。');
     if (owner && session.role !== 'owner') throw new AccessError(403, '此操作只能在电脑管理端执行。');
   }
+  function reauthorize(req, owner = false) {
+    const current = sessions.get(req.headers.cookie, cookieName());
+    authorized(current, owner);
+    if (current.role === 'owner' && !localOwnerRequest(req)) throw new AccessError(401, '当前连接已失效。');
+    return current;
+  }
+  async function streamFile(req, res, file, content = false) {
+    const inline = content && /^(image\/(png|jpeg|gif|webp|avif|bmp)|application\/pdf)$/.test(file.mime);
+    if (content && !inline) throw new AccessError(415, '此格式请下载后打开。');
+    res.setHeader('Content-Security-Policy', inline && file.mime === 'application/pdf' ? "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" : "sandbox; default-src 'none'; frame-ancestors 'self'");
+    res.setHeader('Content-Type', inline ? file.mime : 'application/octet-stream');
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="download"; filename*=UTF-8''${encodeURIComponent(file.name).replace(/['()*]/g, ch => '%' + ch.charCodeAt(0).toString(16))}`);
+    res.setHeader('Accept-Ranges', 'bytes');
+    let start = 0, end = file.size - 1;
+    if (req.headers.range) {
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+      if (!range || (!range[1] && !range[2]) || file.size === 0) { res.writeHead(416, { 'Content-Range': `bytes */${file.size}` }); res.end(); return; }
+      if (!range[1]) start = Math.max(0, file.size - Number(range[2]));
+      else { start = Number(range[1]); if (range[2]) end = Math.min(end, Number(range[2])); }
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= file.size) { res.writeHead(416, { 'Content-Range': `bytes */${file.size}` }); res.end(); return; }
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${file.size}`);
+    }
+    res.writeHead(req.headers.range ? 206 : 200, { 'Content-Length': Math.max(0, end - start + 1) });
+    if (file.size === 0) res.end();
+    else await pipeline(createReadStream(file.absolutePath, { start, end }), res);
+  }
   function pairingView(p) {
     if (!p || p.expiresAt <= Date.now()) return { url: null, qrDataUrl: null, expiresAt: 0 };
     const url = p.baseUrl + '/#pair=' + p.token;
@@ -113,7 +147,7 @@ export async function createConsole(options = {}) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     try {
       const origin = originFor(req);
@@ -141,6 +175,7 @@ export async function createConsole(options = {}) {
         if (role === 'owner') result.connection = currentConnections();
         if (['owner', 'controller'].includes(role)) result.permissions = permissions.view(role);
         if (['owner', 'controller'].includes(role)) result.desktop = { connected: Boolean(desktop?.state?.connected), error: desktop?.state?.error || null };
+        if (['owner', 'controller'].includes(role)) result.features = { attachments: true, desktopProjects: Boolean(desktopProjects), nativeGpt: Boolean(nativeGpt) };
         send(res, 200, result); return;
       }
       if (method === 'POST' && url.pathname === '/api/owner-login') {
@@ -181,7 +216,7 @@ export async function createConsole(options = {}) {
         }
         throw new AccessError(404, '此更新操作不存在。');
       }
-      if (method === 'POST' && /^\/api\/(threads|approvals)(?:\/|$)/.test(url.pathname)) {
+      if (method === 'POST' && /^\/api\/(threads|approvals|attachments|desktop|gpt)(?:\/|$)/.test(url.pathname)) {
         if (updateLock || updater.getState().status === 'installing') throw new AccessError(409, '正在安装更新，暂时不能提交新的任务操作。');
         affectsTasks = true; taskRequests++;
       }
@@ -208,6 +243,52 @@ export async function createConsole(options = {}) {
       if (url.pathname === '/api/logout' && method === 'POST') { await body(req); if (session.role !== 'owner') sessions.change(session.id, 'revoked'); else sessions.items.delete(session.hash); res.setHeader('Set-Cookie', `${cookieName()}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`); send(res, 200, { ok: true }); return; }
       if (url.pathname === '/api/shutdown' && method === 'POST') { authorized(session, true); await body(req); send(res, 200, { ok: true }); setTimeout(() => close().then(() => options.onShutdown?.()), 100).unref(); return; }
       if (url.pathname === '/api/models' && method === 'GET') { send(res, 200, { models: await tasks.models.list({ refresh: true }) }); return; }
+      if (url.pathname === '/api/attachments' && method === 'POST') {
+        if (!req.headers['content-type']?.toLowerCase().startsWith('application/octet-stream')) throw new AccessError(415, '附件上传必须使用文件二进制内容。');
+        const attachment = await attachments.upload(req, req.headers['x-file-name'], session, () => reauthorize(req));
+        send(res, 201, { attachment }); return;
+      }
+      match = /^\/api\/attachments\/([a-f0-9]{32})\/(download|content|delete)$/.exec(url.pathname);
+      if (match) {
+        if (method === 'POST' && match[2] === 'delete') { await body(req); send(res, 200, await attachments.delete(match[1], session)); return; }
+        if (method === 'GET' && match[2] !== 'delete') {
+          const file = await attachments.resolve(match[1], session, projectScope());
+          reauthorize(req);
+          await streamFile(req, res, file, match[2] === 'content'); return;
+        }
+      }
+      if (url.pathname === '/api/desktop/projects' && method === 'GET') {
+        if (!desktopProjects) { send(res, 200, { available: false, projects: [], sections: [], capabilities: { createProject: false, createThread: false }, hint: '请在电脑打开并连接 ChatGPT/Codex 桌面端。' }); return; }
+        const result = await desktopProjects.list({ fresh: url.searchParams.get('refresh') === 'true' });
+        reauthorize(req); send(res, 200, result); return;
+      }
+      match = /^\/api\/desktop\/projects\/([a-zA-Z0-9_-]+)\/threads$/.exec(url.pathname);
+      if (match && method === 'POST') {
+        if (!desktopProjects) throw new AccessError(409, '电脑桌面项目接口尚未连接。');
+        const input = await body(req), prepared = await attachments.prepare(input.prompt, input.attachmentIds, session);
+        reauthorize(req);
+        const result = await desktopProjects.createThread(match[1], { ...input, prompt: prepared.prompt, beforeWrite: () => reauthorize(req) });
+        attachments.bind(prepared.selected, result.threadId || result.clientThreadId);
+        send(res, 201, result); return;
+      }
+      if (url.pathname.startsWith('/api/gpt/')) {
+        if (!nativeGpt) throw new AccessError(409, '请在电脑打开已登录的 ChatGPT 桌面端。');
+        if (url.pathname === '/api/gpt/status' && method === 'GET') { const result = await nativeGpt.status(); reauthorize(req); send(res, 200, result); return; }
+        if (url.pathname === '/api/gpt/threads' && method === 'GET') { const result = await nativeGpt.list(); reauthorize(req); send(res, 200, result); return; }
+        match = /^\/api\/gpt\/threads\/([a-zA-Z0-9_-]+)(?:\/(messages))?$/.exec(url.pathname);
+        if (match && method === 'GET' && !match[2]) {
+          const result = await nativeGpt.get(match[1], { cursor: url.searchParams.get('cursor') || undefined, stage: url.searchParams.get('stage') || 'full', since: url.searchParams.get('since') || undefined });
+          reauthorize(req); send(res, 200, attachments.normalize(result)); return;
+        }
+        if (match && method === 'POST' && match[2] === 'messages') {
+          const input = await body(req);
+          if (input.attachmentIds?.length) throw new AccessError(400, '当前 GPT 桌面接口不支持发送附件，请在电脑端添加。');
+          if (input.action && input.action !== 'steer') throw new AccessError(400, '当前 GPT 桌面接口不支持停止后发送，请在电脑端处理。');
+          const result = await nativeGpt.send(match[1], input.prompt, { ...input, beforeWrite: () => reauthorize(req) });
+          reauthorize(req); send(res, 200, attachments.normalize(result)); return;
+        }
+        throw new AccessError(404, '此 GPT 操作暂不可用。');
+      }
       if (url.pathname === '/api/filesystem' && method === 'GET') {
         permissions.require(session.role, 'allowOtherFiles');
         const directories = await projects.browseDirectories(url.searchParams.get('path'));
@@ -259,7 +340,11 @@ export async function createConsole(options = {}) {
             if (!project || !project.exists) throw new AccessError(400, '请选择一个可访问的电脑项目。');
             cwd = project.path;
           }
-          send(res, 201, await tasks.create(input.prompt, cwd, { model: input.model, effort: input.effort }));
+          const prepared = await attachments.prepare(input.prompt, input.attachmentIds, session);
+          reauthorize(req);
+          const result = await tasks.create(prepared.prompt, cwd, { model: input.model, effort: input.effort, ...(prepared.localImages.length ? { localImages: prepared.localImages } : {}), beforeWrite: () => reauthorize(req) });
+          attachments.bind(prepared.selected, result.thread?.id);
+          send(res, 201, attachments.normalize(result));
         }
         return;
       }
@@ -278,10 +363,40 @@ export async function createConsole(options = {}) {
           res.setHeader('ETag', etag);
           if (req.headers['if-none-match'] === etag) { res.writeHead(304); res.end(); return; }
           if (url.searchParams.get('since') === view.revision) send(res, 200, { unchanged: true, revision: view.revision });
-          else send(res, 200, view);
+          else send(res, 200, attachments.normalize(view));
           return;
         }
-        if (method === 'POST' && match[2]) { const input = await body(req); if (match[2] === 'stop') permissions.require(session.role, 'allowMobileStop'); send(res, 200, match[2] === 'stop' ? await tasks.stop(match[1]) : match[2] === 'fork' ? await tasks.fork(match[1], input) : await tasks.send(match[1], input.prompt, { model: input.model, effort: input.effort })); return; }
+        if (method === 'POST' && match[2]) {
+          const input = await body(req), id = match[1];
+          if (match[2] === 'stop') { permissions.require(session.role, 'allowMobileStop'); send(res, 200, await tasks.stop(id, { beforeWrite: () => { reauthorize(req); permissions.require(session.role, 'allowMobileStop'); } })); return; }
+          if (match[2] === 'fork') { send(res, 200, attachments.normalize(await tasks.fork(id, { ...input, beforeWrite: () => reauthorize(req) }))); return; }
+          if (input.action !== undefined && !['steer', 'stopThenSend'].includes(input.action)) throw new AccessError(400, '未知的发送方式。');
+          if (sendLocks.has(id)) throw new AccessError(409, '此聊天正在处理上一条指令，请稍候。');
+          sendLocks.add(id);
+          try {
+            const prepared = await attachments.prepare(input.prompt, input.attachmentIds, session);
+            if (input.action === 'stopThenSend') {
+              permissions.require(session.role, 'allowMobileStop');
+              if (!tasks.owned.has(id)) throw new AccessError(409, '此桌面聊天不支持远程停止，请在电脑端停止后再发送。');
+              const initial = await tasks.get(id);
+              if (['running', 'waiting', 'waiting_for_approval'].includes(initial.thread.status)) {
+                await tasks.stop(id, { beforeWrite: () => { reauthorize(req); permissions.require(session.role, 'allowMobileStop'); } });
+                const deadline = Date.now() + 15000;
+                while (true) {
+                  const current = await tasks.get(id);
+                  reauthorize(req); permissions.require(session.role, 'allowMobileStop');
+                  if (!['running', 'waiting', 'waiting_for_approval'].includes(current.thread.status)) break;
+                  if (Date.now() >= deadline) throw new AccessError(409, '已请求停止，但尚未确认任务结束；新消息未发送，请查看状态后重试。');
+                  await new Promise(resolve => setTimeout(resolve, 250));
+                }
+              }
+            }
+            reauthorize(req);
+            const result = await tasks.send(id, prepared.prompt, { model: input.model, effort: input.effort, ...(prepared.localImages.length ? { localImages: prepared.localImages } : {}), beforeWrite: () => reauthorize(req) });
+            attachments.bind(prepared.selected, id);
+            send(res, 200, attachments.normalize(result)); return;
+          } finally { sendLocks.delete(id); }
+        }
       }
       match = /^\/api\/approvals\/([a-f0-9]+)$/.exec(url.pathname);
       if (match && method === 'POST') { const input = await body(req); permissions.require(session.role, 'allowMobileApprovals'); send(res, 200, await tasks.answer(match[1], input)); return; }
@@ -291,7 +406,7 @@ export async function createConsole(options = {}) {
       else res.end();
     } finally { if (affectsTasks) taskRequests--; }
   });
-  server.requestTimeout = 30000;
+  server.requestTimeout = 180000;
   server.headersTimeout = 15000;
   server.maxConnections = 64;
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, options.host || '0.0.0.0', resolve); });
@@ -312,13 +427,13 @@ export async function createConsole(options = {}) {
       let timer;
       await Promise.race([attempts, new Promise(resolve => { timer = setTimeout(resolve, 2000); timer.unref?.(); })]);
       clearTimeout(timer);
-      await Promise.allSettled([tunnel.stop(), bridge.close(), desktop?.close(), updater.close()]);
+      await Promise.allSettled([tunnel.stop(), bridge.close(), nativeGpt?.close(), desktopProjects?.close(), desktop?.close(), updater.close()]);
       server.closeAllConnections();
       await httpClosed;
     })();
     return closePromise;
   }
-  return { server, bridge, desktop, tasks, projects, permissions, sessions, tunnel, updater, port, ownerUrl, connections, close };
+  return { server, bridge, desktop, tasks, projects, attachments, desktopProjects, nativeGpt, permissions, sessions, tunnel, updater, port, ownerUrl, connections, close };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

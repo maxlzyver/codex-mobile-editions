@@ -33,9 +33,18 @@ jobs:
           for edition in windows10 windows11 macos; do
             MOBILE_UI_EDITION="$edition" node tools/test-progressive-ui.mjs
           done
+      - name: Verify V1.2 attachments, project sidebar and native GPT mode
+        run: |
+          for edition in windows10 windows11 macos; do
+            MOBILE_UI_EDITION="$edition" node tools/test-v120-ui.mjs
+          done
   verify:
     name: ${{ matrix.edition }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      CODEX_UPDATE_E2E_EDITIONS: ${{ matrix.edition }}
+      CODEX_UPDATE_E2E_OUTPUT: ${{ runner.temp }}/codex-mobile-update-evidence
+      CODEX_UPDATE_E2E_LEGACY: '0'
     strategy:
       fail-fast: false
       matrix:
@@ -69,3 +78,23 @@ jobs:
         working-directory: editions/${{ matrix.edition }}
         shell: powershell
         run: .\build-launcher.ps1
+      - name: Verify real server startup update notices without manual checks
+        run: node tools/test-update-startup.mjs
+      - name: Verify optional legacy repair refuses running services and preserves user data
+        run: node --test tools/test-update-repair.mjs
+      - name: Verify real automatic V1.2.0 to isolated future-version upgrade
+        timeout-minutes: 8
+        run: node tools/test-cross-version-update.mjs
+      - name: Save automatic upgrade evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: update-evidence-${{ matrix.edition }}-${{ matrix.os }}
+          path: |
+            ${{ env.CODEX_UPDATE_E2E_OUTPUT }}/**/report.json
+            ${{ env.CODEX_UPDATE_E2E_OUTPUT }}/**/network.txt
+            ${{ env.CODEX_UPDATE_E2E_OUTPUT }}/**/requests.txt
+            ${{ env.CODEX_UPDATE_E2E_OUTPUT }}/**/updates/install-*/apply.log
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

@@ -123,8 +123,11 @@ export function createInstaller({ rootDir, runtimeDir, onBeforeInstall, isBusy =
       await writeFile(planPath, JSON.stringify(plan), { mode: 0o600 });
       hash = await sha256(planPath);
       if (await isBusy()) throw new AccessError(409, '校验期间有任务开始执行，请在任务结束后重试。');
-      const child = spawnProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-PlanPath', planPath, '-PlanSha256', hash, '-Mode', 'Apply'], {
-        windowsHide: true, detached: true, stdio: 'ignore', cwd: job, env: { ...process.env },
+      const child = spawnProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-PlanPath', planPath, '-PlanSha256', hash, '-Mode', 'Launch'], {
+        // Windows PowerShell can exit successfully before running -File when
+        // Node creates it with DETACHED_PROCESS. The helper's Launch broker uses
+        // Start-Process instead so Apply survives the service's shutdown.
+        windowsHide: true, stdio: 'ignore', cwd: job, env: { ...process.env },
       });
       let helperFailure = null;
       child.once('exit', code => { helperFailure = new Error(`更新安装助手在接管前已退出（${code}），服务未授权进行更新。`); });

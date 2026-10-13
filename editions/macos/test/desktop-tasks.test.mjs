@@ -109,6 +109,20 @@ test('native get formats live messages and object output without exposing reason
   assert.equal(native.calls[0].args.hostId, 'local');
 });
 
+test('native image generation preserves only its saved path as primary assistant output', async () => {
+  const { tasks, native } = fixture();
+  native.reads.set('desktop', { thread: local('desktop'), page: { order: 'oldest-first' }, turns: [{ id: 'image-turn', status: 'completed', items: [
+    { id: 'input-image', type: 'imageView', path: 'C:\\project\\input.png' },
+    { id: 'generated', type: 'imageGeneration', savedPath: 'C:\\project\\output.png', status: 'completed', result: 'BINARY_RESULT_MUST_NOT_LEAK', revisedPrompt: 'PRIVATE_METADATA' },
+  ] }] });
+  const view = await tasks.get('desktop', { stage: 'recent' });
+  const image = view.thread.messages.find(message => message.id === 'generated');
+  assert.equal(image.role, 'assistant'); assert.equal(image.phase, 'final_answer'); assert.equal(image.deferred, undefined);
+  assert.deepEqual(image.generatedImage, { savedPath: 'C:\\project\\output.png' });
+  assert(!view.thread.messages.some(message => message.id === 'input-image' && message.role === 'assistant'));
+  assert(!JSON.stringify(view).includes('BINARY_RESULT_MUST_NOT_LEAK')); assert(!JSON.stringify(view).includes('PRIVATE_METADATA'));
+});
+
 test('native send stays in the selected conversation and omits model settings when unchanged', async () => {
   const { tasks, companion, native } = fixture();
   const view = await tasks.send('desktop', '  Continue this exact conversation  ');

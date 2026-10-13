@@ -1,10 +1,10 @@
-# macOS 专用版 V1.0.1：发布与自动更新
+# macOS 专用版 V1.2.0：发布与自动更新
 
 仓库：`maxlzyver/codex-mobile-editions`。本版清单路径固定为 `editions/macos/update.json`，不允许 Windows 更新混入。
 
 日常更新可直接上传平台文件夹及同次生成的清单到 `main` 原位置。清单包含程序文件的大小和 SHA256，采用 `runtimePolicy: preserve` 保留已安装双架构组件。客户端固定一次 Git 提交，验证该提交下对应目录；没有根目录、旧仓库或 Releases 回退。
 
-首次安装必须使用 Release 中完整的 `codex-mobile-macos-1.0.1-universal.zip`。仓库源码不含 Node.js/cloudflared；GitHub Source code ZIP 不是完整安装包。
+首次安装必须使用 Release 中完整的 `codex-mobile-macos-1.2.0-universal.zip`。仓库源码不含 Node.js/cloudflared；GitHub Source code ZIP 不是完整安装包。
 
 后续提高 `edition.json` 与 `package.json` 版本，并更新 `assetName`、界面版本及说明。在仓库根使用 `python tools/package-editions.py --help` 查看参数，生成清单和完整包；运行 `python tools/verify-editions.py` 及 Mac 测试。新清单与程序必须一起提交，不能仅改版本或上传 ZIP。
 
@@ -16,4 +16,4 @@ Mac ZIP 必须保留 Start.command、Stop.command、Login.command、两套 Node 
 
 发布前更新本平台的 docs/UPDATE-NOTES.md。根打包工具会将该文件的纯文本写入 update.json.releaseNotes，供新版本弹窗与设置页展示。启动后及每 6 小时只检查新版本；自动安装仍由原开关控制。用户勾选下次更新前不再提示后按版本记忆，下一版本会恢复提醒。
 
-本次 V1.0.1 重制使用独立发布标签 v1.0.1-rebuild.1，已装同版本时需参照 [保留数据换装说明](V1.0.1-REBUILD.md)操作；以后正常发布仍需提高版本。
+此前 V1.0.1 重制使用独立发布标签 v1.0.1-rebuild.1，已装同版本时需参照 [保留数据换装说明](V1.0.1-REBUILD.md)操作；以后正常发布仍需提高版本。

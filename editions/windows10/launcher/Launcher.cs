@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -19,8 +19,8 @@ using System.Reflection;
 [assembly: AssemblyProduct("Codex 移动助手 · Windows 10 专用版")]
 [assembly: AssemblyCompany("maxlzyver")]
 [assembly: AssemblyCopyright("Copyright © maxlzyver")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace CodexMobile
 {
@@ -98,7 +98,7 @@ namespace CodexMobile
         internal const string EditionId = "windows10";
         internal const string EditionLabel = "Windows 10 专用版";
         internal const string Platform = "Windows 10 x64";
-        internal const string Version = "1.1.0";
+        internal const string Version = "1.2.0";
         internal const string DisplayName = "Codex 移动助手 · Windows 10 专用版";
         internal static readonly long StartedAt = (long)(Process.GetCurrentProcess().StartTime.ToUniversalTime() - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
 
