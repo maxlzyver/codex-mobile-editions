@@ -1,0 +1,163 @@
+{
+  "files": [
+    {
+      "bytes": 630,
+      "path": ".codex-plugin/plugin.json",
+      "sha256": "46d7287b6eab9ab97520d8a685a83fa78360b6bf925a6ab9b4c16b8eb90b21fb"
+    },
+    {
+      "bytes": 635,
+      "path": "Install-Plugin.command",
+      "sha256": "f785af2ec7cb54aae253f634dd67c5306cdbdb2a00324b5e1593a9393f9cf73b"
+    },
+    {
+      "bytes": 1264,
+      "path": "Install-Plugin.ps1",
+      "sha256": "7ee8c7f7ee981385e2d99d577cd13d0087cf48b1e456212ceb836928c7c2ff4c"
+    },
+    {
+      "bytes": 1096,
+      "path": "LICENSE",
+      "sha256": "e2209eb3b875828941f295214883c3e581c76a393125541384a2b8572287f002"
+    },
+    {
+      "bytes": 4643,
+      "path": "README.md",
+      "sha256": "e6467181032d70504c03b2cff3c48e80b9c57444c8c31cb6ac7bf7aaf415acd7"
+    },
+    {
+      "bytes": 1006,
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "dd8cb470af2ab8d2fe0adb4ff6e01f15ce869349194dd46e5e7bb92cf6568e5e"
+    },
+    {
+      "bytes": 121660,
+      "path": "assets/support-wechat.jpg",
+      "sha256": "8af48983cf8f470542e4cd73db7af21a3a262118420fbba1d11450b5f6b9c6a0"
+    },
+    {
+      "bytes": 616496,
+      "path": "dist/server.mjs",
+      "sha256": "e0f8530e8ce8280485dfb13e8cd9e6294e5f97be99a080188007af8497262970"
+    },
+    {
+      "bytes": 6753,
+      "path": "lib/backend.mjs",
+      "sha256": "2438cb577e852e4b737017b95e38b29cf4de498d065a4d0b91e35bdc2817a00b"
+    },
+    {
+      "bytes": 8516,
+      "path": "lib/config.mjs",
+      "sha256": "bf103e2df131c0949f9d73499b49e24871d71cf582a7de4c4542d6d4456abe63"
+    },
+    {
+      "bytes": 14555,
+      "path": "lib/plugin-updater.mjs",
+      "sha256": "e650e0f00e3d32b8018be5b8890a2cae64754185346a23853ba6d2e891d39765"
+    },
+    {
+      "bytes": 11742,
+      "path": "lib/server.mjs",
+      "sha256": "c3ed3c00869d2169240ad29dd65dc5ef92b5d939df361141d94bb00734a905c9"
+    },
+    {
+      "bytes": 1090,
+      "path": "licenses/ajv-LICENSE.txt",
+      "sha256": "a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3"
+    },
+    {
+      "bytes": 1074,
+      "path": "licenses/ajv-formats-LICENSE.txt",
+      "sha256": "9df3bb69929a3b650ed73b3bfa1756725aaff0ac296461605753547004eafeaf"
+    },
+    {
+      "bytes": 1074,
+      "path": "licenses/fast-deep-equal-LICENSE.txt",
+      "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a"
+    },
+    {
+      "bytes": 1813,
+      "path": "licenses/fast-uri-LICENSE.txt",
+      "sha256": "b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786"
+    },
+    {
+      "bytes": 1074,
+      "path": "licenses/json-schema-traverse-LICENSE.txt",
+      "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a"
+    },
+    {
+      "bytes": 12227,
+      "path": "licenses/mcp-apps.txt",
+      "sha256": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a"
+    },
+    {
+      "bytes": 1071,
+      "path": "licenses/mcp-sdk.txt",
+      "sha256": "5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d"
+    },
+    {
+      "bytes": 12227,
+      "path": "licenses/modelcontextprotocol-ext-apps-LICENSE.txt",
+      "sha256": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a"
+    },
+    {
+      "bytes": 1071,
+      "path": "licenses/modelcontextprotocol-sdk-LICENSE.txt",
+      "sha256": "5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d"
+    },
+    {
+      "bytes": 1072,
+      "path": "licenses/zod-LICENSE.txt",
+      "sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8"
+    },
+    {
+      "bytes": 745,
+      "path": "licenses/zod-to-json-schema-LICENSE.txt",
+      "sha256": "80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4"
+    },
+    {
+      "bytes": 1072,
+      "path": "licenses/zod.txt",
+      "sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8"
+    },
+    {
+      "bytes": 273,
+      "path": "mcp.json",
+      "sha256": "10571e4eda21bb4a394eaa33a556e1443904f885ef3b02fd3e77dacad9a0b10a"
+    },
+    {
+      "bytes": 509,
+      "path": "package.json",
+      "sha256": "4e187ab3fde804c681b7d59138951feb1a2313f9fcc217af86a5cc901aea3c8e"
+    },
+    {
+      "bytes": 397,
+      "path": "plugin.json",
+      "sha256": "27d4d85f7fe109c4bd4ce7fb0c4ca9ae12629ea7bb714b581301cbadb6893dc8"
+    },
+    {
+      "bytes": 5261,
+      "path": "scripts/setup.mjs",
+      "sha256": "1ccf8e18872ac70f556cf701eb71ae9a3ff4b0013212d06af1dd34c9a53f9297"
+    },
+    {
+      "bytes": 1127,
+      "path": "skills/mobile/SKILL.md",
+      "sha256": "0941cf7c45af09517642cdd357190bf239f28c777aa321a0b874d20135e2d7f2"
+    },
+    {
+      "bytes": 1116,
+      "path": "skills/setup/SKILL.md",
+      "sha256": "06c4c43f8542c81057ddc6f4cacdebab8851254fe8e18fcbb9449bbdd0a57e5a"
+    },
+    {
+      "bytes": 614424,
+      "path": "ui/app.html",
+      "sha256": "1eaebd113abc91cc1c91bbab6864bacef809509058a33f663280db1796880d9e"
+    }
+  ],
+  "name": "codex-mobile",
+  "releaseNotes": "V1.3.0 · 分区显示与 Codex 插件\n\n- 手机按桌面真实分区、项目与聊天显示，保留顺序、独立聊天与空自定义分区；分别记忆 Codex/GPT 的折叠状态，手动刷新同步调整。\n- 新增 Codex 内嵌插件入口，包含连接手机、设备管理、手机权限、使用说明、更新与关于；独立软件和网页继续可用。\n- 软件与插件共享同一后台服务、配置和配对；插件启动后台时不弹出管理网页。\n- 插件自身支持检查更新、一键更新和自动更新，区分运行、安装、最新与待重新加载状态；自动安装默认关闭，任务繁忙时等待。\n- 保留 V1.2 的 GPT 文字续聊、Codex 附件与原图、文件浏览下载、消息回执、模型与思考强度、运行中引导、支持的停止与审批、外观设置、反馈和赞助。\n- 保留软件启动后及每 6 小时的更新检查、版本说明和“下次更新前不再提示”（仅本版本不再提示）；关闭自动安装仍会提醒新版。\n\n三种专用版统一为 1.3.0。V1.2 用户沿用原更新入口；本地运行组件、配对、权限与项目保持保留。插件首次使用需要单独安装。桌面原聊天的停止与审批仍受接口能力限制。\n\n插件使用教学\n\n1. 下载对应系统的 V1.3 完整软件包和 codex-mobile-plugin-1.3.0.zip，分别完整解压；已有 1.3 软件的用户直接使用现有软件目录。\n2. Windows 在插件目录打开 PowerShell，运行 .\\Install-Plugin.ps1 -InstallationRoot '软件目录绝对路径' -DefaultCwd '已有项目目录绝对路径' -Register。macOS 在插件目录运行 bash ./Install-Plugin.command '软件目录绝对路径' --default-cwd '已有项目目录绝对路径' --register。把示例路径换成自己的实际目录。\n3. 在 Codex 的插件入口打开“Codex 移动助手”，或要求“打开移动助手管理面板”，点击“启动助手”。后台已有服务会被复用，不必打开软件管理网页。\n4. 同一 Wi-Fi 下生成局域网二维码；外网使用时先开启互联网连接，再生成外网二维码。手机扫码后，到“设备”批准连接。二维码两分钟有效且仅用一次。\n5. “手机权限”内分别控制审批、停止任务及访问其他目录，设置与软件共用。原桌面聊天操作仍受 Codex 接口限制。\n6. “更新”内分别检查插件和后台的新版本，点击对应的一键更新按钮；需要自动安装时开启相应开关，默认关闭。任务繁忙时等待空闲。\n7. 插件显示运行、已安装、最新三个版本。出现“待 Codex 重新加载”时按提示重新加载插件，必要时结束手头工作后重新打开 Codex，再核对运行版本。后台更新可能改变互联网临时地址，但保留配对和权限。\n8. 使用说明、连接诊断与关于信息均在插件面板内。详细步骤见发布包 docs/V1.3.0-PLUGIN-GUIDE.md；独立软件启动入口保持可用。",
+  "schema": 1,
+  "version": "1.3.0"
+}

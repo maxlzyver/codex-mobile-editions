@@ -19,7 +19,7 @@ SOURCE = ROOT / 'plugins/codex-mobile'
 ROOT_FILES = {'plugin.json', 'mcp.json', 'package.json', 'README.md', 'LICENSE',
               'THIRD_PARTY_NOTICES.md', 'Install-Plugin.ps1', 'Install-Plugin.command'}
 PUBLIC_DIRS = {'dist', 'ui', 'scripts', 'skills', 'assets', 'licenses', 'lib', '.codex-plugin'}
-EXCLUDED_FILES = {'build.mjs', 'app.js', 'app.css', 'template.html'}
+EXCLUDED_FILES = {'build.mjs', 'test-ui.mjs', 'app.js', 'app.css', 'template.html'}
 REQUIRED = {'plugin.json', 'package.json', '.codex-plugin/plugin.json', 'mcp.json', 'dist/server.mjs', 'ui/app.html',
             'skills/mobile/SKILL.md', 'skills/setup/SKILL.md', 'README.md', 'LICENSE'}
 PRIVATE = {'.runtime', '.git', '.codex', 'node_modules', 'test', 'tests', 'work',

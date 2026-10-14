@@ -43,6 +43,12 @@ jobs:
           for edition in windows10 windows11 macos; do
             MOBILE_UI_EDITION="$edition" node tools/test-v130-sections-ui.mjs
           done
+      - name: Build and test embedded plugin page with the official MCP Apps bridge
+        working-directory: plugins/codex-mobile
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npm run test:ui
   verify:
     name: ${{ matrix.edition }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -73,6 +79,14 @@ jobs:
         run: python tools/verify-editions.py --edition ${{ matrix.edition }}
       - name: Verify update notes packaging
         run: python tools/test-package-release-notes.py
+      - name: Build and verify the plugin runtime
+        working-directory: plugins/codex-mobile
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npm test
+      - name: Verify plugin release manifest and bundled files
+        run: python tools/package-plugin.py --verify
       - name: Run protocol, file access and update tests
         working-directory: editions/${{ matrix.edition }}
         run: node --test test/*.test.mjs

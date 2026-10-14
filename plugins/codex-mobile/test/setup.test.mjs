@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
+import { setup } from '../scripts/setup.mjs';
+import { readJson, writeJson } from '../lib/config.mjs';
+const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+test('setup binds bundled Node in Chinese space paths and preserves settings across reinstall', async t => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), '插件 setup ')); t.after(() => rm(temp, { recursive: true, force: true }));
+  const install = path.join(temp, '完整 软件'), dataDir = path.join(temp, '插件 数据'), project = path.join(temp, '项目');
+  await mkdir(install); await mkdir(project);
+  const validate = async directory => ({ root: directory, nodePath: path.join(directory, 'runtime/node.exe'), profile: { id: 'windows11', version: '1.3.0' } });
+  const discoverCodex = async () => path.join(temp, 'codex.exe');
+  const result = await setup({ installationRoot: install, defaultCwd: project, dataDir, source, validate, discoverCodex });
+  const config = await readJson(path.join(dataDir, 'config.json')), mcp = await readJson(path.join(result.pluginSourceRoot, 'mcp.json'));
+  assert.equal(mcp.mcpServers.mobile.command, 'node.exe');
+  assert.equal(mcp.mcpServers.mobile.env.PATH.split(path.delimiter)[0], path.join(install, 'runtime'));
+  assert.equal(mcp.mcpServers.mobile.env.CODEX_MOBILE_PLUGIN_DATA, dataDir); assert.equal(config.defaultCwd, await realpath(project));
+  const marketplace = await readJson(path.join(result.marketplaceRoot, '.agents/plugins/marketplace.json'));
+  assert.equal(marketplace.plugins[0].source.path, './plugins/codex-mobile'); assert.equal(result.registered, false);
+  await writeJson(path.join(dataDir, 'update-settings.json'), { autoUpdate: true });
+  await setup({ installationRoot: install, dataDir, source, validate, discoverCodex });
+  assert.equal((await readJson(path.join(dataDir, 'update-settings.json'))).autoUpdate, true);
+  assert.equal((await readJson(path.join(dataDir, 'config.json'))).defaultCwd, await realpath(project));
+  await assert.rejects(setup({ installationRoot: install, defaultCwd: install, dataDir, source, validate, discoverCodex }), /安装目录/);
+});
