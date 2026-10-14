@@ -12,9 +12,9 @@
       "sha256": "2ae4212406f699b8574cf7c4fb6bf152ef306224b8d03027c9bc1343f507f827"
     },
     {
-      "bytes": 7452,
+      "bytes": 7946,
       "path": "README.md",
-      "sha256": "73b3bfe0609712505e5c3a5baeefb1082dfc03c13e60a5cdbe9968ed37cd0d16"
+      "sha256": "0daf22441baaaf30ede8ba76585e11fe3d3eb53b9b7d0edaab360ba6cbe57814"
     },
     {
       "bytes": 456,
@@ -37,14 +37,14 @@
       "sha256": "9eed9f73960ae6320c366af3b0b4a7148352627d92b5fe2b19cc566a381072a9"
     },
     {
-      "bytes": 2038,
+      "bytes": 6394,
       "path": "docs/RELEASING.md",
-      "sha256": "90c03a473ffe1210538712f06fdb6abd4720b9e24e03490586934d83a286cd09"
+      "sha256": "1680eb7e8ca0097d2fd4cf096c1c67f4af989ca2e83c4449943ad7882f119223"
     },
     {
-      "bytes": 1784,
+      "bytes": 2998,
       "path": "docs/UPDATE-NOTES.md",
-      "sha256": "eba050df8050786590e67e0aa0ac3b33ac999fe762098a78c2559b1a903973c6"
+      "sha256": "22764d4422568f5f399936b97a75d506846761d880deed7e271b07ea785ae9e3"
     },
     {
       "bytes": 2828,
@@ -57,14 +57,34 @@
       "sha256": "e6eda60931fcd4ba68efcffaba163d5e7174f5ad3159aa086da44079e29f2deb"
     },
     {
+      "bytes": 1784,
+      "path": "docs/V1.2.0-UPDATE-NOTES.md",
+      "sha256": "eba050df8050786590e67e0aa0ac3b33ac999fe762098a78c2559b1a903973c6"
+    },
+    {
       "bytes": 2901,
       "path": "docs/V1.2.0-UPGRADE.md",
       "sha256": "600cfef6f122f5b669ba99f112e814f4fb4474986e36d3c61db13e5cd72eb43e"
     },
     {
+      "bytes": 1684,
+      "path": "docs/V1.3.0-FEATURES.md",
+      "sha256": "3fa53157d20b121829971e461d1bf6981c8c3fe285b8971941377bb4c07b3121"
+    },
+    {
+      "bytes": 4236,
+      "path": "docs/V1.3.0-PLUGIN-GUIDE.md",
+      "sha256": "6b99821669fb048ba8c27c9807470b9cb9f4c1b2440dc9430ffef45775b41db5"
+    },
+    {
+      "bytes": 1067,
+      "path": "docs/V1.3.0-UPGRADE.md",
+      "sha256": "2dc85289b7366a1053e899bc960d5a50e74d07331952c2710d28bd5305dcb40f"
+    },
+    {
       "bytes": 247,
       "path": "edition.json",
-      "sha256": "0a29e93d94bc37aa641b9ed38872525232d758ef14db7904b5056f7c578c9c26"
+      "sha256": "a9a57aa0474e2a6d04b3f7c35a5a06c7d1415f3eb9cbd375087d84ef27adba48"
     },
     {
       "bytes": 541,
@@ -87,9 +107,9 @@
       "sha256": "bc42cc5d51249f72efa7ee30ae59fe6c2e702a9c88eb9e7367a4e52b65117a29"
     },
     {
-      "bytes": 12365,
+      "bytes": 13858,
       "path": "lib/desktop-projects.mjs",
-      "sha256": "db319e26f0d1aea2ecf80bc6e12f0d7d51a6d2de526474d959cea28a7e182485"
+      "sha256": "1e4d3316e454b7c640bfe4eb4b53b8eedab1ecc57058f938315f48866aea0f45"
     },
     {
       "bytes": 20134,
@@ -102,9 +122,9 @@
       "sha256": "23cc84ef652efc4282b1808f0bf3fcd0ee727d41b51d4f6e195b51b30b3768c9"
     },
     {
-      "bytes": 9294,
+      "bytes": 9450,
       "path": "lib/mac-launcher.mjs",
-      "sha256": "fcd1eba983745697d3b9b3fc6b6f3c28267bb6dce67921dc19fe8f6eff0f5139"
+      "sha256": "97e4abb0b221107c9c33bec03bfd0a7bca5591fb66adac64bbfba5da293f0539"
     },
     {
       "bytes": 4070,
@@ -154,7 +174,7 @@
     {
       "bytes": 603,
       "path": "package.json",
-      "sha256": "db07ce9fdcde0ce863d99da3a28f21ab7f6716ea6ef6383df43fc3336cf1b1d4"
+      "sha256": "bef9c69b5b3f3d35105451ca0951b4d0a437c88d85dd1e7f8bb0d5bfce893078"
     },
     {
       "bytes": 40084,
@@ -172,9 +192,9 @@
       "sha256": "ae7ffc0a72459a8c57518c5b060b9153760d5c43822426a9af09af3dadde2f96"
     },
     {
-      "bytes": 111374,
+      "bytes": 115386,
       "path": "public/app.js",
-      "sha256": "4213b3549c74e3e8be3c6efeed30d898179c859aa78e051c56d037ec00ac41d1"
+      "sha256": "a984747afa855a7db033635bebe35e86f2acc8a76c13ddc5d04dfc52ad7d905a"
     },
     {
       "bytes": 35362,
@@ -194,7 +214,7 @@
     {
       "bytes": 36256,
       "path": "public/index.html",
-      "sha256": "8532a3a371ef9884913fe8977e5fb21d36f37b790f73527da9abf650875596c6"
+      "sha256": "636be6ed83f768bcd392f5d241a6d03a32acae3d7aba49a882132cb82e8beefc"
     },
     {
       "bytes": 617,
@@ -217,9 +237,9 @@
       "sha256": "59f2304b1a280a66c6c435b7964e4c11ed1e1b78f26af863afbaa42a8a5e931a"
     },
     {
-      "bytes": 48762,
+      "bytes": 49819,
       "path": "public/styles.css",
-      "sha256": "33a9635841e9fc8c859b60c353850b985b6e56501819b473f22b236e135ef294"
+      "sha256": "4df9dfc7e5f31f4d822c71ced9b849548618bc99090d0a743e806149245c9653"
     },
     {
       "bytes": 121660,
@@ -247,9 +267,9 @@
       "sha256": "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a"
     },
     {
-      "bytes": 34210,
+      "bytes": 35108,
       "path": "server.mjs",
-      "sha256": "06724e047c0ce8f52cd441bfdd9784b2f53c8119e0060cb2c361660c3208ebae"
+      "sha256": "17ff743ef235e5ce462f7e2d02471bb96a28c90db406d842381d19bb4f74eda0"
     },
     {
       "bytes": 12394,
@@ -265,6 +285,11 @@
       "bytes": 7866,
       "path": "test/desktop-bridge.test.mjs",
       "sha256": "4f768804074285e7b7291137a9676a982cf4e8f2588793369c34b95362a7a3c9"
+    },
+    {
+      "bytes": 6621,
+      "path": "test/desktop-sections.test.mjs",
+      "sha256": "df3c79473fc1c01c84531e0de8987fadce1eab22065c12e258f7d90bac09a7d0"
     },
     {
       "bytes": 30099,
@@ -302,9 +327,9 @@
       "sha256": "4bb0c11dcbdbd6d44c1e727fcc8d97789a36417709900032628e8771c811cdfa"
     },
     {
-      "bytes": 48780,
+      "bytes": 51007,
       "path": "test/server.test.mjs",
-      "sha256": "356e22c11be3c5a4163a089fbc1c210de6a9119f1cb09e4c77a55eebe1b63a6b"
+      "sha256": "2b6f2709ea8c68fee265e73bc1a196f3a90d8072133fd41df0480ccc4c92d270"
     },
     {
       "bytes": 6172,
@@ -349,8 +374,8 @@
   ],
   "name": "Codex 移动助手",
   "platform": "macOS universal",
-  "releaseNotes": "V1.2.0 · 项目、GPT 聊天、附件与自动升级\n\n- 左侧按电脑真实项目归类聊天，支持在已有 Codex 项目内新建子聊天；不按文件路径猜测项目归属。\n- 新增 GPT 切换，直接复用桌面登录，查看与继续已有 GPT 聊天。GPT 沿用电脑当前聊天的模型；新建、模型切换、停止和附件发送请在电脑完成。\n- 手机支持从相册或文件管理添加 Codex 附件，显示上传进度、图片预览和文件类型卡片，可下载附件与图片原图。每次最多 8 个文件，单个最多 25 MiB。\n- 用户消息改为紧凑的右侧气泡；将系统问答回执和附件说明还原为实际内容。改进 Markdown、代码、表格与公式显示。\n- 执行中显示状态条，可引导当前 Codex 任务；助手独立任务在权限允许时还支持停止后发送。桌面原聊天（包括手机在桌面项目中新建的子聊天）的停止仍需在电脑完成。\n- 修复 Windows 更新助手提前退出的问题；1.2 开启自动更新后自动发现新版，等待任务空闲，下载、校验、安装并重启，保留本地设置和配对。\n- 保留启动后及每 6 小时的更新检查、版本说明和“下次更新前不再提示”（仅本版本不再提示）；关闭自动安装仍会提醒新版。\n- 保留 1.1 的近期结果优先、历史和执行记录逐步加载、原图标、整轮折叠、文件浏览、模型与思考强度、权限、主题字体、反馈和赞助。\n\n三种专用版统一为 1.2.0。重点验证从 1.2 自动升级到后续版本；更早版本更新失败时可先换装完整包。桌面功能取决于本机接口能力，不等同于全部 ChatGPT 桌面功能；列表未返回的较早聊天请先在电脑打开再刷新。",
+  "releaseNotes": "V1.3.0 · 分区显示与 Codex 插件\n\n- 手机按桌面真实分区、项目与聊天显示，保留顺序、独立聊天与空自定义分区；分别记忆 Codex/GPT 的折叠状态，手动刷新同步调整。\n- 新增 Codex 内嵌插件入口，包含连接手机、设备管理、手机权限、使用说明、更新与关于；独立软件和网页继续可用。\n- 软件与插件共享同一后台服务、配置和配对；插件启动后台时不弹出管理网页。\n- 插件自身支持检查更新、一键更新和自动更新，区分运行、安装、最新与待重新加载状态；自动安装默认关闭，任务繁忙时等待。\n- 保留 V1.2 的 GPT 文字续聊、Codex 附件与原图、文件浏览下载、消息回执、模型与思考强度、运行中引导、支持的停止与审批、外观设置、反馈和赞助。\n- 保留软件启动后及每 6 小时的更新检查、版本说明和“下次更新前不再提示”（仅本版本不再提示）；关闭自动安装仍会提醒新版。\n\n三种专用版统一为 1.3.0。V1.2 用户沿用原更新入口；本地运行组件、配对、权限与项目保持保留。插件首次使用需要单独安装。桌面原聊天的停止与审批仍受接口能力限制。\n\n插件使用教学\n\n1. 下载对应系统的 V1.3 完整软件包和 codex-mobile-plugin-1.3.0.zip，分别完整解压；已有 1.3 软件的用户直接使用现有软件目录。\n2. Windows 在插件目录打开 PowerShell，运行 .\\Install-Plugin.ps1 -InstallationRoot '软件目录绝对路径' -DefaultCwd '已有项目目录绝对路径' -Register。macOS 在插件目录运行 bash ./Install-Plugin.command '软件目录绝对路径' --default-cwd '已有项目目录绝对路径' --register。把示例路径换成自己的实际目录。\n3. 在 Codex 的插件入口打开“Codex 移动助手”，或要求“打开移动助手管理面板”，点击“启动助手”。后台已有服务会被复用，不必打开软件管理网页。\n4. 同一 Wi-Fi 下生成局域网二维码；外网使用时先开启互联网连接，再生成外网二维码。手机扫码后，到“设备”批准连接。二维码两分钟有效且仅用一次。\n5. “手机权限”内分别控制审批、停止任务及访问其他目录，设置与软件共用。原桌面聊天操作仍受 Codex 接口限制。\n6. “更新”内分别检查插件和后台的新版本，点击对应的一键更新按钮；需要自动安装时开启相应开关，默认关闭。任务繁忙时等待空闲。\n7. 插件显示运行、已安装、最新三个版本。出现“待 Codex 重新加载”时按提示重新加载插件，必要时结束手头工作后重新打开 Codex，再核对运行版本。后台更新可能改变互联网临时地址，但保留配对和权限。\n8. 使用说明、连接诊断与关于信息均在插件面板内。详细步骤见发布包 docs/V1.3.0-PLUGIN-GUIDE.md；独立软件启动入口保持可用。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
-  "version": "1.2.0"
+  "version": "1.3.0"
 }

@@ -14,6 +14,8 @@
 .env
 .env.*
 dist/
+!plugins/codex-mobile/dist/
+!plugins/codex-mobile/dist/**
 
 
 **/tools/package-release.mjs

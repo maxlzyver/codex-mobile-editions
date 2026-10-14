@@ -1,9 +1,9 @@
 {
   "id": "windows10",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "label": "Windows 10 专用版",
   "platform": "Windows 10 x64",
   "repository": "maxlzyver/codex-mobile-editions",
   "updatePath": "editions/windows10",
-  "assetName": "codex-mobile-windows10-1.2.0-x64.zip"
+  "assetName": "codex-mobile-windows10-1.3.0-x64.zip"
 }

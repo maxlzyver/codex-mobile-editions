@@ -1,12 +1,16 @@
-# Codex 移动助手 · macOS 专用版 V1.2.0
+# Codex 移动助手 · macOS 专用版 V1.3.0
 
-版本 **1.2.0** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [邮件反馈](mailto:lzyuan666666@gmail.com)
+版本 **1.3.0** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [邮件反馈](mailto:lzyuan666666@gmail.com)
 
 用手机浏览器查看 Mac 上 Codex 的任务与输出、选择模型和思考强度、远程发送指令，并预览和下载本地项目文件。支持 Wi-Fi 配对、互联网临时连接、主题字体设置、分平台自动更新和自愿赞助入口。
 
+## V1.3.0 更新
+
+手机侧栏新增真实分区、项目与聊天的层级显示，分别记忆 Codex/GPT 折叠状态；新增 Codex 内嵌插件管理入口，保留独立软件使用方式。两种入口共享服务、手机权限与设备配对，插件自身支持更新检查、一键更新和自动更新。保留 V1.2 全部既有功能。详情见 [本版说明](docs/UPDATE-NOTES.md)、[功能范围](docs/V1.3.0-FEATURES.md)和[升级说明](docs/V1.3.0-UPGRADE.md)。
+
 ## V1.2.0 更新
 
-同步电脑真实项目与下属聊天，支持在已有 Codex 项目中新建原桌面子聊天；新增复用桌面登录的 GPT 文字续聊、手机 Codex 附件上传和原图下载。消息气泡、文件卡片、Markdown 与公式显示重新整理，增加任务状态与引导选项；助手独立任务还支持停止后发送。修复 Windows 安装助手交接，验证从 1.2 向后续版本自动升级。保留 1.1 的加载优化、图标及既有功能。详情见 [本版说明](docs/UPDATE-NOTES.md) 和 [功能范围](docs/V1.2.0-FEATURES.md)。
+同步电脑真实项目与下属聊天，支持在已有 Codex 项目中新建原桌面子聊天；新增复用桌面登录的 GPT 文字续聊、手机 Codex 附件上传和原图下载。消息气泡、文件卡片、Markdown 与公式显示重新整理，增加任务状态与引导选项；助手独立任务还支持停止后发送。修复 Windows 安装助手交接，验证从 1.2 向后续版本自动升级。保留 1.1 的加载优化、图标及既有功能。详情见 [V1.2 原版说明](docs/V1.2.0-UPDATE-NOTES.md) 和 [功能范围](docs/V1.2.0-FEATURES.md)。
 
 ## V1.0.1 已有功能
 
@@ -15,9 +19,9 @@
 
 ## 系统与安装
 
-当前版本为 **V1.2.0**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.2.0)。
+当前版本为 **V1.3.0**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.0)。
 
-- **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.2.0-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
+- **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.3.0-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
 - Mac 需自行安装并登录兼容的 Codex 桌面应用或 CLI；包内不包含 Codex 程序和账户。
 - 完整解压到当前用户可写目录，保持目录结构。不能使用 GitHub 自动生成的 Source code ZIP 代替完整安装包。
 

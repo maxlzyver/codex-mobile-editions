@@ -39,8 +39,9 @@ async function json(filename) { return JSON.parse(await readFile(filename, 'utf8
 async function configuration(root, { choose = false, silent = false } = {}) {
   const filename = path.join(root, '.runtime/launcher.json');
   let config = {}; try { config = await json(filename); } catch (error) { if (error.code !== 'ENOENT') throw new Error('启动配置损坏，请检查 .runtime/launcher.json。'); }
+  if (process.env.CODEX_MOBILE_CWD) config.defaultCwd = process.env.CODEX_MOBILE_CWD;
   if (!config.defaultCwd || choose) {
-    if (silent) throw new Error('缺少工作目录配置，请先双击 Start.command。');
+    if (silent) throw new Error('缺少工作目录配置，请先在插件中选择工作目录，或双击 Start.command。');
     const script = 'on run argv\nset chosen to choose folder with prompt "选择 Codex 工作目录（手机可访问此目录中的项目文件）"\nreturn POSIX path of chosen\nend run';
     const selection = await exec('/usr/bin/osascript', ['-e', script], { timeout: 300000, maxBuffer: 8192 });
     config.defaultCwd = selection.stdout.trim();
@@ -89,7 +90,7 @@ export async function main(rootDir, command = 'start', options = []) {
   assertMac();
   const root = await realpath(rootDir), runtime = path.join(root, '.runtime');
   await noLinks(runtime); await mkdir(runtime, { recursive: true, mode: 0o700 });
-  const silent = options.includes('--after-update');
+  const silent = options.includes('--after-update') || options.includes('--headless');
   if (command === 'login') {
     let configured; try { configured = (await json(path.join(runtime, 'launcher.json'))).codexBinary; } catch { /* First login may precede configuration. */ }
     const binary = await findCodex(configured);

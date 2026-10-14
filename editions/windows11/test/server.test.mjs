@@ -16,6 +16,47 @@ class FakeUpdater {
   close() {}
 }
 
+test('plugin management snapshot requires local owner and omits session credentials', async t => {
+  const f = await fixture(t, { updater: new FakeUpdater() });
+  const owner = await f.owner(), phone = await f.pair(owner);
+  await f.request(`/api/devices/${phone.id}/approve`, { ...owner, method: 'POST', data: {} });
+  assert.equal((await f.request('/api/plugin/status')).status, 401);
+  assert.equal((await f.request('/api/plugin/status', phone)).status, 403);
+  assert.equal((await f.request('/api/plugin/status', { ...owner, headers: { 'X-Forwarded-For': '127.0.0.1' } })).status, 401);
+  f.app.tasks.list = async () => [];
+  f.app.tasks.cache.clear();
+  const result = await f.request('/api/plugin/status', owner);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.busy, false);
+  assert.equal(result.body.defaultCwd, f.projectRoot);
+  assert.equal(result.body.devices.length, 1);
+  assert.equal(result.body.permissions.allowMobileStop, false);
+  assert.equal(result.body.updates.autoUpdate, false);
+  const encoded = JSON.stringify(result.body);
+  assert(!encoded.includes(f.app.sessions.ownerToken));
+  assert(!encoded.includes(owner.csrf));
+  assert.equal(result.body.csrfToken, undefined);
+  f.app.tasks.list = async () => [{ id: 'busy', status: 'running' }];
+  assert.equal((await f.request('/api/plugin/status', owner)).body.busy, true);
+  f.app.tasks.list = async () => { throw new Error('connection unavailable'); };
+  assert.equal((await f.request('/api/plugin/status', owner)).body.busy, true);
+});
+
+test('plugin management snapshot rechecks owner session after awaiting task status', async t => {
+  const f = await fixture(t, { updater: new FakeUpdater() }), owner = await f.owner();
+  let release, entered;
+  const pending = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  f.app.tasks.list = async () => { entered(); await pending; return []; };
+  const reading = f.request('/api/plugin/status', owner);
+  await started;
+  await f.request('/api/logout', { ...owner, method: 'POST', data: {} });
+  release();
+  const result = await reading;
+  assert.equal(result.status, 401);
+  assert.equal(result.body.devices, undefined);
+});
+
 test('staged thread validators reduce unchanged responses without bypassing authentication or stages', async t => {
   const f = await fixture(t);
   const auth = await f.owner();

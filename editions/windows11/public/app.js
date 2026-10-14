@@ -31,7 +31,7 @@
   document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(...icon(node.dataset.icon).childNodes));
 
   const state = {
-    mode: 'codex', nativeProjects: [], nativeProjectId: '', projectCatalog: null, projectCatalogAt: 0, projectExpanded: new Map(), gptStatus: null, gptPage: null, gptHistory: [], gptHistoryBusy: null, pendingCreation: false,
+    mode: 'codex', nativeProjects: [], nativeProjectId: '', projectCatalog: null, projectCatalogAt: 0, projectCatalogGeneration: 0, sidebarExpanded: new Map(), gptStatus: null, gptPage: null, gptHistory: [], gptHistoryBusy: null, pendingCreation: false,
     attachmentDrafts: [], uploadRequests: new Set(), attachmentSequence: 0,
     snapshots: new Map(), snapshotChars: 0, renderedRows: new Map(), recentRevision: '', fullRevision: '', desiredDetailsRevision: '', loadedDetailsRevision: '', recentMessages: [], progressive: false,
     detailBusy: null, detailTimer: null, detailAttempts: 0, lastDetailAt: 0, threadPollTimer: null, listPollTimer: null, listBusy: null, sessionRevision: 0,
@@ -43,6 +43,23 @@
     wantInternetPair: false, shownReady: false, activeReadOnly: false, lanUrl: '', lastThreadError: '',
     models: [], projects: [], projectId: '', filesProjectId: '', filePath: '', filesGeneration: 0, projectsGeneration: 0, accessRevision: 0, selectionThread: null, view: 'chat', modelsBusy: false,
   };
+  const sidebarStorageKey = `codex-mobile.${document.documentElement.dataset.edition || 'web'}.sidebar-disclosures.v1`;
+  try {
+    const saved = JSON.parse(localStorage.getItem(sidebarStorageKey) || '[]');
+    if (Array.isArray(saved)) for (const entry of saved.slice(-600)) {
+      if (Array.isArray(entry) && typeof entry[0] === 'string' && entry[0].length <= 2100 && typeof entry[1] === 'boolean') state.sidebarExpanded.set(entry[0], entry[1]);
+    }
+  } catch { /* Browser storage is optional; in-memory folding still works. */ }
+  function sidebarDisclosure(group, type, id, mode = state.mode) {
+    const key = `${mode}:${type}:${id}`;
+    group.open = state.sidebarExpanded.get(key) !== false;
+    group.addEventListener('toggle', () => {
+      if (!group.isConnected || state.sidebarExpanded.get(key) === group.open) return;
+      state.sidebarExpanded.delete(key); state.sidebarExpanded.set(key, group.open);
+      while (state.sidebarExpanded.size > 600) state.sidebarExpanded.delete(state.sidebarExpanded.keys().next().value);
+      try { localStorage.setItem(sidebarStorageKey, JSON.stringify([...state.sidebarExpanded])); } catch {}
+    });
+  }
   const disclosureStorageKey = `codex-mobile.${document.documentElement.dataset.edition || 'web'}.process-disclosures.v2`;
   try {
     const saved = JSON.parse(sessionStorage.getItem(disclosureStorageKey) || '[]');
@@ -278,13 +295,24 @@
   function renderThreads() {
     const list = $('thread-list');
     list.replaceChildren();
-    if (!state.threads.length && !state.nativeProjects.length) {
+    const kind = state.mode === 'gpt' ? 'chatgpt' : 'codex';
+    const projects = state.nativeProjects.filter(project => project.kind === kind);
+    const threads = state.threads.filter(thread => thread.archived !== true && thread.isArchived !== true);
+    const projectsById = new Map(projects.map(project => [project.id, project]));
+    const threadsById = new Map(threads.map(thread => [thread.id, thread]));
+    const memberships = new Map((state.projectCatalog?.threadMemberships || []).filter(item => item.kind === kind).map(item => [item.id, item.projectId]));
+    const sections = (state.projectCatalog?.sections || []).flatMap(section => {
+      const source = section.items || [];
+      const items = source.filter(item => item.kind === kind && (item.type === 'project' ? projectsById.has(item.id) : item.type === 'thread' && threadsById.has(item.id)));
+      return items.length || !source.length && (!section.type || section.type === 'custom') ? [{ ...section, items }] : [];
+    });
+    if (!threads.length && !projects.length && !sections.length) {
       list.append(node('p', 'list-empty', '还没有任务，开始第一段工作吧。'));
       return;
     }
     const threadButton = thread => {
       const button = node('button', `thread-item${thread.id === state.activeId ? ' active' : ''}`);
-      button.type = 'button';
+      button.type = 'button'; button.dataset.threadId = thread.id;
       button.append(icon('chat'));
       const text = node('span', 'thread-item-text');
       text.append(node('span', 'thread-item-title', thread.title || thread.name || thread.preview || '未命名任务'));
@@ -293,14 +321,22 @@
       button.addEventListener('click', () => openThread(thread.id));
       return button;
     };
-    const used = new Set();
-    for (const project of state.nativeProjects.filter(project => project.kind === (state.mode === 'gpt' ? 'chatgpt' : 'codex'))) {
+    const used = new Set(), usedProjects = new Set();
+    const directThreads = new Set(sections.flatMap(section => section.items.filter(item => item.type === 'thread').map(item => item.id)));
+    const projectGroup = project => {
+      if (usedProjects.has(project.id)) return null;
+      usedProjects.add(project.id);
       const group = node('details', 'sidebar-project'); group.dataset.projectId = project.id;
-      group.open = state.projectExpanded.get(project.id) !== false;
+      sidebarDisclosure(group, 'project', project.id);
       const summary = node('summary', 'sidebar-project-heading'); summary.append(icon('folder'), node('span', '', project.name || '未命名项目'));
-      const children = state.threads.filter(thread => thread.projectId === project.id || project.threadIds?.includes(thread.id));
+      const children = threads.filter(thread => {
+        if (used.has(thread.id) || directThreads.has(thread.id)) return false;
+        // The catalog combines native membership and canonical history. Its
+        // explicit null must beat stale thread-list data after a desktop move.
+        const projectId = memberships.has(thread.id) ? memberships.get(thread.id) : Object.hasOwn(thread, 'projectId') ? thread.projectId : undefined;
+        return projectId !== undefined ? projectId === project.id : project.threadIds?.includes(thread.id);
+      });
       const count = node('small', '', children.length); count.title = '已读取的聊天数，并非项目聊天总数'; summary.append(count); group.append(summary);
-      group.addEventListener('toggle', () => { if (group.isConnected) state.projectExpanded.set(project.id, group.open); });
       const body = node('div', 'sidebar-project-chats');
       if (state.mode === 'codex') {
         const create = node('button', 'project-new-chat', '＋ 新建子聊天'); create.type = 'button'; create.disabled = project.capabilities?.createThread !== true;
@@ -309,22 +345,38 @@
       }
       for (const thread of children) { used.add(thread.id); body.append(threadButton(thread)); }
       if (!children.length) body.append(node('p', 'list-empty', '暂未读取到聊天，可在电脑打开后刷新'));
+      group.append(body); return group;
+    };
+    for (const section of sections) {
+      const group = node('details', 'sidebar-section'); group.dataset.sectionId = section.id;
+      sidebarDisclosure(group, 'section', section.id);
+      const summary = node('summary', 'sidebar-section-heading'); summary.append(node('span', '', section.name || '未命名分区')); group.append(summary);
+      const body = node('div', 'sidebar-section-items');
+      for (const item of section.items) {
+        if (item.type === 'project') { const project = projectGroup(projectsById.get(item.id)); if (project) body.append(project); }
+        else if (!used.has(item.id)) { used.add(item.id); body.append(threadButton(threadsById.get(item.id))); }
+      }
+      if (!body.children.length) body.append(node('p', 'list-empty', '此分区暂无可显示的项目或聊天'));
       group.append(body); list.append(group);
     }
-    const others = state.threads.filter(thread => !used.has(thread.id));
-    if (state.nativeProjects.length && others.length) list.append(node('div', 'unassigned-chats-label', '其他聊天'));
+    const unassignedProjects = projects.filter(project => !usedProjects.has(project.id));
+    if (sections.length && unassignedProjects.length) list.append(node('div', 'unassigned-chats-label', '未分区项目'));
+    for (const project of unassignedProjects) list.append(projectGroup(project));
+    const others = threads.filter(thread => !used.has(thread.id));
+    if ((projects.length || sections.length) && others.length) list.append(node('div', 'unassigned-chats-label', '其他聊天'));
     for (const thread of others) list.append(threadButton(thread));
   }
-  async function loadDesktopProjects() {
+  async function loadDesktopProjects({ fresh = false } = {}) {
     if (!state.bootstrap?.features?.desktopProjects || !['owner', 'controller'].includes(state.role)) return;
-    const revision = state.sessionRevision;
+    const revision = state.sessionRevision, generation = ++state.projectCatalogGeneration;
+    const current = () => revision === state.sessionRevision && generation === state.projectCatalogGeneration && ['owner', 'controller'].includes(state.role);
     try {
-      const data = await api('/api/desktop/projects');
-      if (revision !== state.sessionRevision || !['owner', 'controller'].includes(state.role)) return;
+      const data = await api('/api/desktop/projects' + (fresh ? '?refresh=true' : ''));
+      if (!current()) return;
       state.projectCatalog = data; state.nativeProjects = data.projects || []; state.projectCatalogAt = Date.now();
       $('desktop-project-note').textContent = data.available === false ? data.hint || '请在电脑打开 Codex，连接后显示桌面项目。' : data.complete === false ? '显示当前桌面接口可访问的项目与聊天' : '';
       hidden('desktop-project-note', !$('desktop-project-note').textContent); renderThreads();
-    } catch (error) { if (revision === state.sessionRevision && ['owner', 'controller'].includes(state.role)) { $('desktop-project-note').textContent = error.message; hidden('desktop-project-note', false); } }
+    } catch (error) { if (current()) { $('desktop-project-note').textContent = error.message; hidden('desktop-project-note', false); } }
   }
   async function changeChatMode(mode) {
     if (state.mode === mode || !['owner', 'controller'].includes(state.role)) return;
@@ -382,7 +434,7 @@
     state.readBusy = false; state.detailBusy = null;
   }
   function clearConversationCache() {
-    clearAttachmentDrafts(); state.nativeProjects = []; state.projectCatalog = null; state.gptStatus = null; state.pendingCreation = false;
+    clearAttachmentDrafts(); state.nativeProjects = []; state.projectCatalog = null; state.projectCatalogGeneration++; state.gptStatus = null; state.pendingCreation = false;
     stopConversationReads();
     state.snapshots.clear(); state.snapshotChars = 0; state.renderedRows.clear();
     state.sessionRevision++; state.listBusy = null;
@@ -1582,7 +1634,7 @@
   $('chat-mode-gpt').addEventListener('click', () => changeChatMode('gpt'));
   $('desktop-project-create').addEventListener('click', () => $('desktop-project-dialog').showModal());
   $('desktop-project-close').addEventListener('click', () => $('desktop-project-dialog').close());
-  $('desktop-project-refresh').addEventListener('click', async () => { await loadDesktopProjects(); await loadThreads(); $('desktop-project-dialog').close(); });
+  $('desktop-project-refresh').addEventListener('click', async () => { await loadDesktopProjects({ fresh: true }); await loadThreads(); $('desktop-project-dialog').close(); });
   $('attach-files').addEventListener('click', () => { if (!$('attach-files').disabled) $('attachment-input').click(); });
   $('attachment-input').addEventListener('change', () => selectAttachments([...$('attachment-input').files]));
   $('reconnect').addEventListener('click', async () => {
@@ -1633,7 +1685,7 @@
     catch (error) { $('files-error').textContent = error.message; }
   });
   $('mobile-new').addEventListener('click', resetConversation);
-  $('refresh-threads').addEventListener('click', async () => { await bootstrap(); state.lastThreads = ''; await loadThreads(); await loadDesktopProjects(); toast('任务列表已刷新'); });
+  $('refresh-threads').addEventListener('click', async () => { await bootstrap(); state.lastThreads = ''; await loadDesktopProjects({ fresh: true }); await loadThreads(); toast('任务列表已刷新'); });
   $('load-gpt-history').addEventListener('click', loadGptHistory);
   $('sidebar-open').addEventListener('click', () => $('workspace').classList.add('sidebar-open'));
   $('sidebar-close').addEventListener('click', closeSidebar);

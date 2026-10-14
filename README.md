@@ -1,4 +1,4 @@
-# Codex 移动助手 · V1.2.0 专用版
+# Codex 移动助手 · V1.3.0 专用版
 
 作者：[maxlzyver](https://github.com/maxlzyver) · [反馈邮件](mailto:lzyuan666666@gmail.com) · MIT 许可证
 
@@ -14,15 +14,15 @@
 
 ## 下载与首次使用
 
-请从 [V1.2.0 发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.2.0) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
+请从 [V1.3.0 发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.0) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
 
-当前三版均为 **1.2.0**，在已发布 1.1 的基础上开发，保留加载优化、新图标和既有功能。GPT 复用桌面登录，不添加第二次账号登录。重点验证从 1.2 自动升级到后续版本；更早版本更新失败时见 [升级说明](docs/V1.2.0-UPGRADE.md)。
+当前三版均为 **1.3.0**，在已发布 1.2 的基础上开发，保留加载优化、新图标和既有功能。GPT 复用桌面登录，不添加第二次账号登录。重点验证从 1.2 自动升级到后续版本；更早版本更新失败时见 [升级说明](docs/V1.2.0-UPGRADE.md)。
 
 | 专用版 | 系统要求 | 完整安装包 | 启动入口 |
 | --- | --- | --- | --- |
-| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.2.0-x64.zip | Codex-Mobile.exe |
-| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.2.0-x64.zip | Codex-Mobile.exe |
-| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.2.0-universal.zip | Start.command |
+| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.3.0-x64.zip | Codex-Mobile.exe |
+| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.3.0-x64.zip | Codex-Mobile.exe |
+| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.3.0-universal.zip | Start.command |
 
 完整解压到当前用户可写目录；在电脑安装并登录兼容的 Codex，启动本版助手并选择项目目录。电脑页面点击“连接手机”，手机扫码后由电脑批准。macOS 首次打开未签名脚本，可能需要在 Finder 右键打开并按系统提示批准；本项目不要求关闭系统安全功能。
 
@@ -30,9 +30,13 @@
 
 旧通用版 **1.2 不会自动迁移到本仓库的专用版**。首次换装请退出旧助手，将新完整包解压到新文件夹，重新选择项目并配对手机。电脑项目和 Codex 聊天仍在原位置。
 
+## V1.3.0 更新
+
+手机侧栏新增真实分区、项目与聊天的层级显示，分别记忆 Codex/GPT 折叠状态；新增 Codex 内嵌插件管理入口，保留独立软件使用方式。两种入口共享服务、手机权限与设备配对，插件自身支持更新检查、一键更新和自动更新。保留 V1.2 全部既有功能。详情见 [功能范围](docs/V1.3.0-FEATURES.md)和[升级说明](docs/V1.3.0-UPGRADE.md)。插件安装与更新步骤见 [使用教学](docs/V1.3.0-PLUGIN-GUIDE.md)，源码位于 [plugins/codex-mobile](plugins/codex-mobile)。
+
 ## V1.2.0 更新
 
-同步电脑真实项目与下属聊天，支持在已有 Codex 项目中新建原桌面子聊天；新增复用桌面登录的 GPT 文字续聊、手机 Codex 附件上传和原图下载。消息气泡、文件卡片、Markdown 与公式显示重新整理，增加任务状态与引导选项；助手独立任务还支持停止后发送。修复 Windows 安装助手交接，验证从 1.2 向后续版本自动升级。保留 1.1 的加载优化、图标及既有功能。详情见 [本版说明](editions/windows11/docs/UPDATE-NOTES.md) 和 [功能范围](docs/V1.2.0-FEATURES.md)。
+同步电脑真实项目与下属聊天，支持在已有 Codex 项目中新建原桌面子聊天；新增复用桌面登录的 GPT 文字续聊、手机 Codex 附件上传和原图下载。消息气泡、文件卡片、Markdown 与公式显示重新整理，增加任务状态与引导选项；助手独立任务还支持停止后发送。修复 Windows 安装助手交接，验证从 1.2 向后续版本自动升级。保留 1.1 的加载优化、图标及既有功能。详情见 [V1.2 原版说明](editions/windows11/docs/V1.2.0-UPDATE-NOTES.md) 和 [功能范围](docs/V1.2.0-FEATURES.md)。
 
 ## 保留 V1.0.1 功能
 

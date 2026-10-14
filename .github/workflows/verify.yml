@@ -38,6 +38,11 @@ jobs:
           for edition in windows10 windows11 macos; do
             MOBILE_UI_EDITION="$edition" node tools/test-v120-ui.mjs
           done
+      - name: Verify V1.3 desktop sections and independent collapse state
+        run: |
+          for edition in windows10 windows11 macos; do
+            MOBILE_UI_EDITION="$edition" node tools/test-v130-sections-ui.mjs
+          done
   verify:
     name: ${{ matrix.edition }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -59,6 +64,8 @@ jobs:
             os: macos-15-intel
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24.19.0'
@@ -82,7 +89,7 @@ jobs:
         run: node tools/test-update-startup.mjs
       - name: Verify optional legacy repair refuses running services and preserves user data
         run: node --test tools/test-update-repair.mjs
-      - name: Verify real automatic V1.2.0 to isolated future-version upgrade
+      - name: Verify published V1.2.0 automatically upgrades to the current edition
         timeout-minutes: 8
         run: node tools/test-cross-version-update.mjs
       - name: Save automatic upgrade evidence

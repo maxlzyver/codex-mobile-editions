@@ -103,20 +103,34 @@ export class DesktopProjects {
         const key = `${item.kind}:${item.id}`;
         merged.set(key, { ...merged.get(key), ...item });
       }
-      const entries = [...merged.values()];
+      const entries = [...merged.values()].filter(item => item.archived !== true && item.isArchived !== true);
       const projects = (catalog.projects || []).filter(item => validNativeId(item.projectId) && (item.projectKind === 'local' && item.hostId === 'local' || item.projectKind === 'chatgpt' && !item.hostId)).map(item => ({
         id: item.projectId, name: nativeText(item.label).slice(0, 500) || '未命名项目', kind: item.projectKind === 'chatgpt' ? 'chatgpt' : 'codex', hostId: item.hostId || null,
         cwd: item.projectKind === 'local' ? nativeText(item.path) || null : null, isGitRepository: item.isGitRepository === true,
-        threadIds: entries.filter(thread => thread.projectId === item.projectId).map(thread => thread.id),
+        threadIds: entries.filter(thread => thread.kind === (item.projectKind === 'chatgpt' ? 'chatgpt' : 'codex') && thread.projectId === item.projectId).map(thread => thread.id),
         threadsComplete: false, threadCount: null,
         capabilities: { createThread: capabilities.createThread && item.projectKind === 'local' },
       }));
-      const sections = (threads.sections || []).filter(item => typeof item.sectionId === 'string').map(item => ({
-        id: item.sectionId, name: nativeText(item.name).slice(0, 500),
-        projectIds: projects.filter(project => (item.itemKeys || []).includes(`${project.kind}:project:${project.id}`)).map(project => project.id),
-        threadIds: entries.filter(thread => (item.itemKeys || []).includes(thread.kind === 'chatgpt' ? `chatgpt:conversation:${thread.id}` : `codex:thread:local:${thread.id}`)).map(thread => thread.id),
-      }));
-      return { available: true, projects, sections, complete: false, capabilities, hint, listHint: '显示桌面提供的近期聊天，并补入本机历史中带明确项目编号的聊天。未读取到的较早聊天请在电脑打开后刷新。' };
+      // Keep the desktop's mixed project/thread ordering and identities. Bare IDs
+      // can collide across Codex and GPT; itemKeys are the canonical references.
+      const references = new Map();
+      for (const project of projects) references.set(`${project.kind}:project:${project.id}`, { type: 'project', kind: project.kind, id: project.id });
+      for (const thread of entries) references.set(thread.kind === 'chatgpt' ? `chatgpt:conversation:${thread.id}` : `codex:thread:local:${thread.id}`, { type: 'thread', kind: thread.kind, id: thread.id });
+      const sections = [], sectionIds = new Set();
+      for (const section of Array.isArray(threads.sections) ? threads.sections : []) {
+        if (typeof section.sectionId !== 'string' || !section.sectionId || section.sectionId.length > 2000 || sectionIds.has(section.sectionId)) continue;
+        sectionIds.add(section.sectionId);
+        const seen = new Set(), items = [];
+        for (const key of Array.isArray(section.itemKeys) ? section.itemKeys : []) {
+          if (!references.has(key) || seen.has(key)) continue;
+          seen.add(key); items.push(references.get(key));
+        }
+        sections.push({ id: section.sectionId, type: section.sectionId === 'pinned' ? 'pinned' : section.sectionId === 'threads' ? 'projects' : section.sectionId === 'chats' ? 'threads' : 'custom', name: nativeText(section.name).slice(0, 500) || '未命名分区', items,
+          projectIds: items.filter(item => item.type === 'project').map(item => item.id),
+          threadIds: items.filter(item => item.type === 'thread').map(item => item.id) });
+      }
+      const threadMemberships = entries.filter(item => Object.hasOwn(item, 'projectId')).map(item => ({ id: item.id, kind: item.kind, projectId: validNativeId(item.projectId) ? item.projectId : null }));
+      return { available: true, projects, sections, threadMemberships, complete: false, capabilities, hint, listHint: '显示桌面提供的近期聊天，并补入本机历史中带明确项目编号的聊天。未读取到的较早聊天请在电脑打开后刷新。' };
     } catch {
       return { available: false, projects: [], sections: [], complete: false, capabilities: { createProject: false, renameProject: false, deleteProject: false, createThread: false }, hint: '暂时无法读取原生项目，请保持电脑 Codex 桌面开启后刷新。' };
     }
@@ -133,7 +147,7 @@ export class DesktopProjects {
     try {
       const context = await this.context();
       const catalog = await this.readCatalog('projects', { fresh: true });
-      const project = (catalog.projects || []).find(item => item.projectId === projectId);
+      const project = (catalog.projects || []).find(item => item.projectId === projectId && item.projectKind === 'local' && item.hostId === 'local');
       if (!project || project.projectKind !== 'local' || project.hostId !== 'local') throw new AccessError(403, '只允许在这台电脑已有的 Codex 项目中创建聊天。');
       if (!this.capabilities().createThread) throw new AccessError(501, '当前桌面接口不支持此操作，请在电脑项目中创建聊天。');
       const args = { prompt: options.prompt, target: { type: 'project', projectId, environment: { type: 'local' } }, ...(options.title ? { title: options.title } : {}) };

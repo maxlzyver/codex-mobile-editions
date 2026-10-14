@@ -19,8 +19,8 @@ using System.Reflection;
 [assembly: AssemblyProduct("Codex 移动助手 · Windows 11 专用版")]
 [assembly: AssemblyCompany("maxlzyver")]
 [assembly: AssemblyCopyright("Copyright © maxlzyver")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace CodexMobile
 {
@@ -98,14 +98,14 @@ namespace CodexMobile
         internal const string EditionId = "windows11";
         internal const string EditionLabel = "Windows 11 专用版";
         internal const string Platform = "Windows 11 x64";
-        internal const string Version = "1.2.0";
+        internal const string Version = "1.3.0";
         internal const string DisplayName = "Codex 移动助手 · Windows 11 专用版";
         internal static readonly long StartedAt = (long)(Process.GetCurrentProcess().StartTime.ToUniversalTime() - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
 
         [STAThread]
         private static void Main(string[] args)
         {
-            SilentUpdate = Array.IndexOf(args, "--after-update") >= 0;
+            SilentUpdate = Array.IndexOf(args, "--after-update") >= 0 || Array.IndexOf(args, "--headless") >= 0;
             if (Array.IndexOf(args, "--check") >= 0) { RunCheck(); return; }
             if (Array.IndexOf(args, "--stop") >= 0) { RunStop(); return; }
             Application.EnableVisualStyles();
@@ -122,11 +122,21 @@ namespace CodexMobile
                 {
                     if (!created)
                     {
-                        if (SilentUpdate) return;
-                        RunningServer running = Service.TryRead(null, true);
-                        if (running != null) OpenBrowser(running.OwnerUrl);
-                        else MessageBox.Show("Codex移动助手已在运行或正在启动。请查看任务栏右侧的托盘图标，或完成已打开的设置窗口。", Program.DisplayName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        return;
+                        if (SilentUpdate)
+                        {
+                            if (Service.TryRead(null, true) != null) return;
+                            bool acquired;
+                            try { acquired = mutex.WaitOne(5000); }
+                            catch (AbandonedMutexException) { acquired = true; }
+                            if (!acquired) throw new InvalidOperationException("启动器仍在启动或等待设置，请完成电脑上的设置后重试。");
+                        }
+                        else
+                        {
+                            RunningServer running = Service.TryRead(null, true);
+                            if (running != null) OpenBrowser(running.OwnerUrl);
+                            else MessageBox.Show("Codex移动助手已在运行或正在启动。请查看任务栏右侧的托盘图标，或完成已打开的设置窗口。", Program.DisplayName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            return;
+                        }
                     }
                     File.WriteAllText(Path.Combine(Runtime, "launcher-process.json"), Json.Serialize(new { pid = Process.GetCurrentProcess().Id, root = Root, startedAt = StartedAt }), Encoding.UTF8);
                     try { Application.Run(new LauncherContext()); }
@@ -175,7 +185,8 @@ namespace CodexMobile
 
         internal static void ShowError(Exception error)
         {
-            if (SilentUpdate) { Log("Background restart failed: " + error.Message); return; }
+            Environment.ExitCode = 1;
+            if (SilentUpdate) { Log("Background start failed: " + error.Message); return; }
             MessageBox.Show(error.Message, Program.DisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
@@ -541,7 +552,7 @@ namespace CodexMobile
             tray.DoubleClick += delegate { OpenConsole(); };
             updateTimer = new System.Windows.Forms.Timer();
             updateTimer.Interval = 750;
-            updateTimer.Tick += delegate { CheckUpdateExit(); };
+            updateTimer.Tick += delegate { CheckUpdateExit(); CheckServiceExit(); };
             updateTimer.Start();
             splash.Shown += delegate { BeginStartup(); };
             if (Program.SilentUpdate) dispatcher.BeginInvoke((Action)BeginStartup);
@@ -566,6 +577,28 @@ namespace CodexMobile
             catch { /* A partial or unrelated request never stops this launcher. */ }
         }
 
+        private void CheckServiceExit()
+        {
+            if (stopping || finished || server == null) return;
+            bool exited = false;
+            try
+            {
+                using (Process process = Process.GetProcessById(server.pid))
+                {
+                    long startedAt = (long)(process.StartTime.ToUniversalTime() - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+                    exited = process.HasExited || Math.Abs(startedAt - server.startedAt) > 30000;
+                }
+            }
+            catch (ArgumentException) { exited = true; }
+            catch (InvalidOperationException) { exited = true; }
+            catch { /* Inaccessible process identity does not justify any action. */ }
+            if (exited)
+            {
+                Program.Log("The owned service exited; releasing its tray launcher.");
+                Finish();
+            }
+        }
+
         private void BeginStartup()
         {
             try
@@ -575,7 +608,7 @@ namespace CodexMobile
                 config.codexBinary = Discovery.FindCodex(config.codexBinary);
                 if (config.codexBinary == null)
                 {
-                    if (Program.SilentUpdate) throw new InvalidOperationException("后台更新后无法找到 Codex，请从程序目录手动重新启动并配置。");
+                    if (Program.SilentUpdate) throw new InvalidOperationException("后台启动无法找到 Codex，请在插件中重新配置，或从程序目录启动设置。");
                     MessageBox.Show(splash, "没有自动找到 Codex。请先安装并登录官方 Codex，然后选择电脑上的 codex.exe。此便携包不包含 Codex 或任何人的登录信息。", "选择 Codex", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     using (OpenFileDialog dialog = new OpenFileDialog())
                     {
@@ -595,7 +628,7 @@ namespace CodexMobile
                 }
                 if (!Program.ValidWorkDirectory(config.defaultCwd))
                 {
-                    if (Program.SilentUpdate) throw new InvalidOperationException("后台更新后默认工作目录不可用，请手动打开启动器重新选择。");
+                    if (Program.SilentUpdate) throw new InvalidOperationException("后台启动的默认工作目录不可用，请在插件中重新选择，或打开启动器设置。");
                     string chosen = ChooseFolder(null);
                     if (chosen == null) { Finish(); return; }
                     config.defaultCwd = chosen;

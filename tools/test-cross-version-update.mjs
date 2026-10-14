@@ -11,12 +11,12 @@ import { buildRepairBundle } from './build-update-repair.mjs';
 import { ownerClient } from './update-repair/repair-update.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const WORK = path.resolve(process.env.CODEX_UPDATE_E2E_OUTPUT || path.join(REPO, '../../v120-upgrade-verification'));
+const WORK = path.resolve(process.env.CODEX_UPDATE_E2E_OUTPUT || path.join(REPO, '../../v130-upgrade-verification'));
 const LEGACY = process.env.CODEX_UPDATE_E2E_LEGACY === '1';
-const OLD = LEGACY ? [{ version: '1.0.0', ref: 'v1.0.0', variant: 'original' }, { version: '1.0.1', ref: 'v1.0.1', variant: 'original' }, { version: '1.0.1', ref: '770664ea23255187b389ce9d6817fe1ed98a4e11', variant: 'rebuilt' }, { version: '1.1.0', ref: '874c8e0', variant: 'original' }] : [{ version: '1.2.0', ref: null, variant: 'current-auto-update' }];
-// A future version exists ONLY under this isolated work directory, never in source
-// metadata or GitHub. The default exercises automatic updates without a repair.
-const TARGET = LEGACY ? '1.2.0' : '1.2.1', PIN = 'e'.repeat(40);
+const OLD = LEGACY ? [{ version: '1.0.0', ref: 'v1.0.0', variant: 'original' }, { version: '1.0.1', ref: 'v1.0.1', variant: 'original' }, { version: '1.0.1', ref: '770664ea23255187b389ce9d6817fe1ed98a4e11', variant: 'rebuilt' }, { version: '1.1.0', ref: '874c8e0', variant: 'original' }] : [{ version: '1.2.0', ref: 'v1.2.0', variant: 'published-auto-update' }];
+// The released source tag is the starting point. Network responses alone are
+// isolated; the old updater must install this working tree's real new version.
+const TARGET = JSON.parse(await readFile(path.join(REPO, 'editions/windows11/edition.json'), 'utf8')).version, PIN = 'e'.repeat(40);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const json = async filename => JSON.parse((await readFile(filename, 'utf8')).replace(/^\uFEFF/, ''));
@@ -38,10 +38,11 @@ async function waitFor(work, message, timeout = 90000) {
   while (Date.now() < deadline) { try { const result = await work(); if (result) return result; } catch (error) { last = error; } await sleep(150); }
   throw new Error(message + (last ? ': ' + last.message : ''));
 }
-async function launch(root, env) {
+async function launch(root, env, headless = false) {
   const mac = process.platform === 'darwin';
   const executable = mac ? path.join(root, 'runtime', `darwin-${process.arch}`, 'bin/node') : path.join(root, 'Codex-Mobile.exe');
-  const args = mac ? [path.join(root, 'lib/mac-launcher.mjs'), root, 'start', '--after-update'] : ['--after-update'];
+  const mode = headless ? '--headless' : '--after-update';
+  const args = mac ? [path.join(root, 'lib/mac-launcher.mjs'), root, 'start', mode] : [mode];
   const child = spawn(executable, args, { cwd: root, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = ''; for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { output += data; });
   await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
@@ -198,7 +199,18 @@ for (const edition of editions) {
         assert.equal(requests.includes('POST /api/updates/check'), false); assert.equal(requests.includes('POST /api/updates/install'), false);
       }
       const plan = await json(path.join(runtime, 'updates', installed.job, 'plan.json')); assert.equal(plan.testMode, false);
-      results.push({ edition, from: old.version, variant: old.variant, oldRef: old.ref, to: TARGET, syntheticFutureOnly: !LEGACY, automatic: !LEGACY, busyPreventedDownload: !LEGACY, manualCheckPosts: LEGACY ? 1 : 0, manualInstallPosts: LEGACY ? 1 : 0, originalFailure, repaired: LEGACY && !mac, realRepairEntry: LEGACY && !mac, actualServer: true, actualLauncher: true, launcherPlatformGuardAdaptedForHost: permitHost, nativePlatform: process.platform, nativeArchitecture: process.arch, realHandoffApplyRestart: true, manifestSha256: hash(await readFile(manifestPath)), verifiedFiles: files.length, sentinelsPreserved: true, testMode: false });
+      await launch(root, env, true);
+      await sleep(1000);
+      assert.equal((await ownerClient(root)).state.pid, current.state.pid, 'Plugin mode must reuse the software service');
+      // Shutdown through the API, exactly like the plugin. The tray must release
+      // its mutex without requiring a tray click or an updater exit request.
+      await current.request('/api/shutdown', 'POST');
+      await waitFor(() => { try { process.kill(current.state.pid, 0); return false; } catch (error) { return error.code === 'ESRCH'; } }, 'Service did not stop');
+      await launch(root, env, true);
+      const restarted = await waitFor(async () => { const next = await ownerClient(root); return next.state.pid !== current.state.pid ? next : null; }, 'Plugin could not restart the stopped software service');
+      assert.equal((await restarted.request('/api/plugin/status')).app.version, TARGET);
+      console.log('PASS plugin headless reuse, stop and restart', edition);
+      results.push({ edition, from: old.version, variant: old.variant, oldRef: old.ref, to: TARGET, syntheticFutureOnly: false, automatic: !LEGACY, busyPreventedDownload: !LEGACY, manualCheckPosts: LEGACY ? 1 : 0, manualInstallPosts: LEGACY ? 1 : 0, originalFailure, repaired: LEGACY && !mac, realRepairEntry: LEGACY && !mac, actualServer: true, actualLauncher: true, launcherPlatformGuardAdaptedForHost: permitHost, nativePlatform: process.platform, nativeArchitecture: process.arch, realHandoffApplyRestart: true, manifestSha256: hash(await readFile(manifestPath)), verifiedFiles: files.length, sentinelsPreserved: true, testMode: false });
       console.log('PASS true upgrade', edition, old.version, old.variant, '->', TARGET, LEGACY ? '(legacy path)' : '(fully automatic, busy then idle, no repair, no check/install POST)');
     } finally { await stop(root); }
     await writeFile(path.join(RUN, 'report.json'), JSON.stringify({ ok: true, results }, null, 2));

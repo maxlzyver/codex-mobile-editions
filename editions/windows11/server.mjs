@@ -202,6 +202,22 @@ export async function createConsole(options = {}) {
       if (url.pathname === '/api/status' && method === 'GET') {
         send(res, 200, { codex: signedIn === false ? 'error' : bridge.state.connected ? 'connected' : 'connecting', version: APP_INFO.version, permissions: permissions.view(session.role) }); return;
       }
+      if (url.pathname === '/api/plugin/status' && method === 'GET') {
+        authorized(session, true);
+        const busy = await updateBusy();
+        reauthorize(req, true);
+        send(res, 200, {
+          app: APP_INFO,
+          status: { codex: signedIn === false ? 'error' : bridge.state.connected ? 'connected' : bridge.state.error ? 'error' : 'connecting', mode: bridge.state.mode, version: APP_INFO.version, hostname: os.hostname(), authenticated: signedIn, error: bridge.state.error || null },
+          connection: currentConnections(),
+          desktop: { connected: Boolean(desktop?.state?.connected), error: desktop?.state?.error || null },
+          devices: sessions.devices(),
+          permissions: permissions.view('owner'),
+          updates: updater.getState(),
+          busy: busy || updateLock || Boolean(updateJob),
+          defaultCwd,
+        }); return;
+      }
       if (url.pathname === '/api/updates' && method === 'GET') { send(res, 200, updater.getState()); return; }
       if (url.pathname.startsWith('/api/updates/') && method === 'POST') {
         authorized(session, true);
