@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -194,7 +195,7 @@ def selected_paths(base: Path, edition: str, include_tests: bool):
         paths.update(walk_public(base / directory, base))
     paths.update({"vendor/qrcode.cjs", "vendor/qrcode-LICENSE.txt", "vendor/cloudflared-LICENSE.txt"})
     if edition == "macos":
-        paths.add("tools/apply-update.mjs")
+        paths.update({"tools/apply-update.mjs", "tools/Install-Plugin.command"})
         for architecture in ("arm64", "x64"):
             paths.update({f"runtime/darwin-{architecture}/bin/node", f"runtime/darwin-{architecture}/LICENSE", f"runtime/darwin-{architecture}/source.json",
                           f"vendor/cloudflared-darwin-{architecture}", f"vendor/cloudflared-darwin-{architecture}.json"})
@@ -204,7 +205,7 @@ def selected_paths(base: Path, edition: str, include_tests: bool):
             require(read_json(base / f"vendor/cloudflared-darwin-{architecture}.json").get("sha256") == file_hash(binary), f"cloudflared checksum mismatch: {edition}/{architecture}")
         require(all(PurePosixPath(relative).suffix.lower() not in {".exe", ".dll", ".ps1", ".cmd", ".cs"} and not relative.startswith("launcher/") for relative in paths), "Mac package contains Windows files")
     else:
-        paths.update({"tools/apply-update.ps1", "runtime/node.exe", "runtime/LICENSE", "vendor/cloudflared-windows-amd64.exe", "vendor/cloudflared-release.json"})
+        paths.update({"tools/apply-update.ps1", "tools/Install-Plugin.ps1", "tools/Install-Plugin.cmd", "runtime/node.exe", "runtime/LICENSE", "vendor/cloudflared-windows-amd64.exe", "vendor/cloudflared-release.json"})
         for relative in ("Codex-Mobile.exe", "runtime/node.exe", "vendor/cloudflared-windows-amd64.exe"):
             binary_header(base / relative, edition)
         require(read_json(base / "vendor/cloudflared-release.json").get("sha256") == file_hash(base / "vendor/cloudflared-windows-amd64.exe"), f"cloudflared checksum mismatch: {edition}")
@@ -216,6 +217,13 @@ def selected_paths(base: Path, edition: str, include_tests: bool):
 def plan_edition(edition: str, include_tests=False):
     base = ROOT / "editions" / edition
     profile = profile_for(edition, base)
+    spec = importlib.util.spec_from_file_location("edition_plugin_bundle", ROOT / "tools/bundle-edition-plugin.py")
+    bundler = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bundler)
+    expected_bundle, plugin_version, _ = bundler.bundle_bytes()
+    bundle_path = base / "lib/plugin-bundle.json"
+    regular_file(bundle_path)
+    require(bundle_path.read_bytes() == expected_bundle, f"Embedded plugin differs from current source: {edition}; run tools/bundle-edition-plugin.py --write")
     entries = [entry_for(base, relative, edition) for relative in selected_paths(base, edition, include_tests)]
     require(len({entry.relative.casefold() for entry in entries}) == len(entries), f"Case-colliding release paths: {edition}")
     light_entries = [entry for entry in entries if not entry.relative.startswith(("runtime/", "vendor/cloudflared"))]
@@ -225,8 +233,13 @@ def plan_edition(edition: str, include_tests=False):
                 "files": [entry.record() for entry in light_entries]}
     content = json_bytes(manifest)
     entries.append(Entry("update.json", None, len(content), sha256(content), payload=content))
+    # Existing updaters accept new tools/lib paths, but reject new root names.
+    # Keep the double-click shortcut ZIP-only; tools/ is the updateable entry.
+    alias = "Install-Plugin.command" if edition == "macos" else "Install-Plugin.cmd"
+    source_entry = next(entry for entry in entries if entry.relative == "tools/" + alias)
+    entries.append(Entry(alias, source_entry.source, source_entry.size, source_entry.sha256, source_entry.mode, source_entry.payload))
     entries.sort(key=lambda entry: entry.relative)
-    return {"edition": edition, "base": base, "profile": profile, "entries": entries, "manifest": manifest, "manifestBytes": content}
+    return {"edition": edition, "base": base, "profile": profile, "entries": entries, "manifest": manifest, "manifestBytes": content, "pluginVersion": plugin_version}
 
 
 def read_release_notes(base: Path) -> str:
@@ -310,6 +323,7 @@ def audit_zip(plan, filename: Path):
 def audit_record(plan, archive=None):
     profile = plan["profile"]
     record = {"edition": profile["id"], "version": profile["version"], "platform": profile["platform"], "assetName": profile["assetName"],
+              "bundledPluginVersion": plan["pluginVersion"], "zipOnlyInstallerAliases": ["Install-Plugin.command" if plan["edition"] == "macos" else "Install-Plugin.cmd"],
               "zipRoot": f"codex-mobile-{profile['id']}", "fileCount": len(plan["entries"]), "uncompressedBytes": sum(entry.size for entry in plan["entries"]),
               "updateFileCount": len(plan["manifest"]["files"]), "updateManifestSha256": sha256(plan["manifestBytes"]),
               "zipOnlySanitizedFiles": [entry.relative for entry in plan["entries"] if entry.transformed],

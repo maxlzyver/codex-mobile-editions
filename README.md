@@ -1,4 +1,4 @@
-# Codex 移动助手 · 软件 V1.3.0 / 插件 V1.3.1
+# Codex 移动助手 · V1.3.1
 
 作者：[maxlzyver](https://github.com/maxlzyver) · [反馈邮件](mailto:lzyuan666666@gmail.com) · MIT 许可证
 
@@ -14,15 +14,15 @@
 
 ## 下载与首次使用
 
-请从 [V1.3.0 发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.0) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
+请从 [V1.3.1 完整软件发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-full) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
 
-当前三版均为 **1.3.0**，在已发布 1.2 的基础上开发，保留加载优化、新图标和既有功能。GPT 复用桌面登录，不添加第二次账号登录。重点验证从 1.2 自动升级到后续版本；更早版本更新失败时见 [升级说明](docs/V1.2.0-UPGRADE.md)。
+当前三版均为 **1.3.1**，在已发布 1.2 的基础上开发，保留加载优化、新图标和既有功能。GPT 复用桌面登录，不添加第二次账号登录。重点验证从 1.2 自动升级到后续版本；更早版本更新失败时见 [升级说明](docs/V1.2.0-UPGRADE.md)。
 
 | 专用版 | 系统要求 | 完整安装包 | 启动入口 |
 | --- | --- | --- | --- |
-| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.3.0-x64.zip | Codex-Mobile.exe |
-| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.3.0-x64.zip | Codex-Mobile.exe |
-| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.3.0-universal.zip | Start.command |
+| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | codex-mobile-windows11-1.3.1-x64.zip | Codex-Mobile.exe |
+| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | codex-mobile-windows10-1.3.1-x64.zip | Codex-Mobile.exe |
+| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | codex-mobile-macos-1.3.1-universal.zip | Start.command |
 
 完整解压到当前用户可写目录；在电脑安装并登录兼容的 Codex，启动本版助手并选择项目目录。电脑页面点击“连接手机”，手机扫码后由电脑批准。macOS 首次打开未签名脚本，可能需要在 Finder 右键打开并按系统提示批准；本项目不要求关闭系统安全功能。
 
@@ -30,9 +30,9 @@
 
 旧通用版 **1.2 不会自动迁移到本仓库的专用版**。首次换装请退出旧助手，将新完整包解压到新文件夹，重新选择项目并配对手机。电脑项目和 Codex 聊天仍在原位置。
 
-## V1.3.1 插件安装更新
+## V1.3.1 软件包内置插件安装
 
-新增双击一键安装工具：解压 [1.3.1 插件包](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1)，放在现有完整软件文件夹旁，Windows 双击 `Install-Plugin.cmd`，macOS 双击 `Install-Plugin.command`。自动定位软件与 Codex 并注册，不模拟鼠标键盘，不操作 Codex 窗口。安装时不必提前打开 Codex；完成后自行打开 Codex 使用插件。软件版继续使用 1.3.0，首次连接手机前需登录 Codex。详见 [1.3.1 一键安装教学](docs/V1.3.1-PLUGIN-INSTALL.md)。
+完整软件 ZIP 已内置插件，无需另下插件包。完整解压后，Windows 双击软件根目录 `Install-Plugin.cmd`，macOS 双击 `Install-Plugin.command`，直接绑定这份软件并注册。安装时不必提前打开 Codex，也不会控制鼠标键盘或其他窗口。完成后自行打开 Codex，在“插件 → Codex 移动助手”中打开页面，扫码后批准手机连接。详见 [1.3.1 安装教学](docs/V1.3.1-PLUGIN-INSTALL.md)。
 
 ## V1.3.0 更新
 

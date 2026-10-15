@@ -4,7 +4,7 @@
 
 ## 目录约定
 
-三个平台分别位于 `editions/windows11`、`editions/windows10`、`editions/macos`。每个目录的 `edition.json` 固定平台身份、更新路径、版本与完整 ZIP 文件名。初始均为 `1.0.0`，当前三版为 `1.3.0`，之后可以独立升版。
+三个平台分别位于 `editions/windows11`、`editions/windows10`、`editions/macos`。每个目录的 `edition.json` 固定平台身份、更新路径、版本与完整 ZIP 文件名。初始均为 `1.0.0`，当前三版为 `1.3.1`，之后可以独立升版。
 
 `update.json` 是打包工具生成的轻量更新清单，必须与同目录程序文件保持一致。不要手工修改哈希，也不要把 ZIP 当作唯一仓库内容。客户端从固定提交下载对应目录，不从 Release 选包。
 
@@ -47,3 +47,11 @@ V1.0.1 重制是一次保留软件版本号的例外。已装旧 V1.0.1 的更�
 插件测试包括正式 MCP Apps 消息桥、手机管理受控工具、源码与宿主缓存更新、忙碌等待、校验失败和回滚。实际 Codex 中分别测试插件页直接打开、直接设置、对话入口，并确认页面显示版本。只有浏览器模拟或 stdio 协议成功不足以认定宿主集成通过。
 
 新发布报告必须带插件使用教学，内容见 `docs/V1.3.0-PLUGIN-GUIDE.md`。保持历史 CHANGELOG 内容和旧 Release 不变，三平台更新公告保留上一版原文副本。
+
+## V1.3.1 完整软件内置插件
+
+先构建插件并运行 `python tools/package-plugin.py --build --output-dir <输出目录>`，再运行 `python tools/bundle-edition-plugin.py --write` 将同一份公开插件生成到三个软件目录。最后运行 `python tools/package-editions.py --build --output-dir <输出目录>`。插件源码或说明变动后需重新生成插件清单和软件内插件包，再打包软件；生成文件一起提交。
+
+软件完整 ZIP 根目录提供 Windows `Install-Plugin.cmd` 或 macOS `Install-Plugin.command`。根入口是打包时附加的快捷入口；在线更新清单使用 `tools/` 下的安装脚本与 `lib/` 内插件包，兼容旧版更新路径校验。教学见 `docs/V1.3.1-PLUGIN-INSTALL.md`。
+
+本次产品版本统一为 `1.3.1`。原 `v1.3.1` 发布已锁定且仅有独立插件，完整软件使用 `v1.3.1-full` 发布标签，并设为最新发布。发布应先创建草稿、上传并核对全部附件，最后公开，避免附件锁定后遗漏软件包。

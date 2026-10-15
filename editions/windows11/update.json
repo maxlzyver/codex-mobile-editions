@@ -4,7 +4,7 @@
     {
       "bytes": 144384,
       "path": "Codex-Mobile.exe",
-      "sha256": "23b1d71befb5b6e07301f1bd3902cf46ca2125106008b0ad6562ab8ecad45037"
+      "sha256": "15170e0a65f3a11d2caa5fceb4d55d23671350bc8621bd2721e7764189adec1a"
     },
     {
       "bytes": 1096,
@@ -17,9 +17,9 @@
       "sha256": "414565396dde7c97f1d83a978f11172c68056e022a72905ac40b35cd3f0d8750"
     },
     {
-      "bytes": 12279,
+      "bytes": 12697,
       "path": "README.md",
-      "sha256": "8acf9c3222832b5094f3ee07c4b49b7fb8dd711ccb460c4587eae2e65fdc0c1e"
+      "sha256": "989d5ccc16630ab833f6424e69891ec66a4ebc76dc3ddba6f47eaae0281d4924"
     },
     {
       "bytes": 106,
@@ -44,7 +44,7 @@
     {
       "bytes": 1582,
       "path": "build-launcher.ps1",
-      "sha256": "32ac9a5e02303473c66181f406434b8948a9edf4d92e9c8a3891fddb2183f950"
+      "sha256": "7358bc8be9d324226ecd75d95069da92a6a2ac883827ba195824faf2d4071f5e"
     },
     {
       "bytes": 6750,
@@ -54,12 +54,12 @@
     {
       "bytes": 6394,
       "path": "docs/RELEASING.md",
-      "sha256": "1680eb7e8ca0097d2fd4cf096c1c67f4af989ca2e83c4449943ad7882f119223"
+      "sha256": "b84ada33e0aef1c716a408c9240a0441745870e56421af8dd18c2fea2ce8da0e"
     },
     {
-      "bytes": 3259,
+      "bytes": 2002,
       "path": "docs/UPDATE-NOTES.md",
-      "sha256": "04b0dfedf34c402c21a2495ab6626bdb98537759b353276359d9d2650475fe5d"
+      "sha256": "4cff42ba5814a9c268569cc2c02bf7544a95fdc0f3b255dfaf3060163eb67820"
     },
     {
       "bytes": 2828,
@@ -92,19 +92,29 @@
       "sha256": "212e65ff86e8adcbbfb679969cd4b264738170e05c7467a01b8be09e26bb0a4e"
     },
     {
+      "bytes": 3259,
+      "path": "docs/V1.3.0-UPDATE-NOTES.md",
+      "sha256": "04b0dfedf34c402c21a2495ab6626bdb98537759b353276359d9d2650475fe5d"
+    },
+    {
       "bytes": 1067,
       "path": "docs/V1.3.0-UPGRADE.md",
       "sha256": "2dc85289b7366a1053e899bc960d5a50e74d07331952c2710d28bd5305dcb40f"
     },
     {
+      "bytes": 3928,
+      "path": "docs/V1.3.1-PLUGIN-INSTALL.md",
+      "sha256": "69fd7e9d6dc4cf5b2c4689d27d1b28816c35306725350145ca62e5bae0dce57d"
+    },
+    {
       "bytes": 257,
       "path": "edition.json",
-      "sha256": "9147ea3eaeb5d2b36ab269c3a9db0b864f299164685fe46c54c9f87ffa23601c"
+      "sha256": "32dd2d0a0d3894a9309a185a61b3a38b51e1f43c536dce4849c0e3483ed4bf67"
     },
     {
       "bytes": 41178,
       "path": "launcher/Launcher.cs",
-      "sha256": "4f79c4ef0d1febee6c86f1e900b01037cca97d7084471e06df3fee6706e82d53"
+      "sha256": "931b72d8c3088e448d971ff775539bcd1a25ff602e98bb9f58ab0a13ec753e79"
     },
     {
       "bytes": 969,
@@ -142,6 +152,11 @@
       "sha256": "23cc84ef652efc4282b1808f0bf3fcd0ee727d41b51d4f6e195b51b30b3768c9"
     },
     {
+      "bytes": 8116,
+      "path": "lib/install-plugin.mjs",
+      "sha256": "0d165491d1f6bf7069cba5d21799ca135604d8d77cf306d4d8d768ef3561503d"
+    },
+    {
       "bytes": 4070,
       "path": "lib/models.mjs",
       "sha256": "479eddcf4b78fc11c1e1d297b29cba9a5a751e391c46c6a3bffb62506e2689fb"
@@ -155,6 +170,11 @@
       "bytes": 2259,
       "path": "lib/permissions.mjs",
       "sha256": "a15e417c87eb1ab417501ae5dc900c0e31b610dead231ca8ac0bce7b166be808"
+    },
+    {
+      "bytes": 2052323,
+      "path": "lib/plugin-bundle.json",
+      "sha256": "68d6c18e6828f2cf14deadc8e0c9ab8677eca69755973406ac6f960c9793cc40"
     },
     {
       "bytes": 3674,
@@ -189,7 +209,7 @@
     {
       "bytes": 579,
       "path": "package.json",
-      "sha256": "e669daa1a142611dc7ee62c09c47e4c67141f07c792b690940499a3bd1a6363e"
+      "sha256": "0d1d5ce8634542f8b295a5d20d0a5c8c5297ff2ce4470567b917c673c9335f60"
     },
     {
       "bytes": 40084,
@@ -229,7 +249,7 @@
     {
       "bytes": 36301,
       "path": "public/index.html",
-      "sha256": "d9ebf8b1dee29f90433da5106bb33133a1b27db1ca5f3c05c6fcd71e0d3011ba"
+      "sha256": "532032b09f74b1eef40fd5fe11419d762c5d6b505569876cc794575b6dc4369b"
     },
     {
       "bytes": 629,
@@ -287,84 +307,14 @@
       "sha256": "7e5713114bc8c26e0bf0ee702b1f43f97579cecb82ab797678f87f8d840577a0"
     },
     {
-      "bytes": 12394,
-      "path": "test/attachments.test.mjs",
-      "sha256": "79de361707c0a0bab6e9febc76e65a01c479dfe7a8133e047a9d3b36dd196b54"
+      "bytes": 321,
+      "path": "tools/Install-Plugin.cmd",
+      "sha256": "4b04e4103d81d5fd246fce6120f7cfbf01daa8ea0bb9b57d8b6fe50c1b33342e"
     },
     {
-      "bytes": 6551,
-      "path": "test/bridge.test.mjs",
-      "sha256": "a894b6d3e3d215aec82868fec7fd1158d52c4d1579476027a0ee6c0811547534"
-    },
-    {
-      "bytes": 7825,
-      "path": "test/desktop-bridge.test.mjs",
-      "sha256": "501155cc164e2d5d51a5a8cc9fb1e3e430f00ebe4dccb2b88da909a28f175029"
-    },
-    {
-      "bytes": 6621,
-      "path": "test/desktop-sections.test.mjs",
-      "sha256": "df3c79473fc1c01c84531e0de8987fadce1eab22065c12e258f7d90bac09a7d0"
-    },
-    {
-      "bytes": 30105,
-      "path": "test/desktop-tasks.test.mjs",
-      "sha256": "e41995f0d096b1118a6cda1cc4528ee681add12949fd834d27dcbed72cca29cf"
-    },
-    {
-      "bytes": 16391,
-      "path": "test/files.test.mjs",
-      "sha256": "0de9f55996d06b65205c5a8954cd43e3482d235af833587ae8ad267b1292c12f"
-    },
-    {
-      "bytes": 4636,
-      "path": "test/models.test.mjs",
-      "sha256": "8fca75644ffb21bce0966d1a92f8aad33874e6d4952d64073d18c45c5b2b0d49"
-    },
-    {
-      "bytes": 16635,
-      "path": "test/native-gpt.test.mjs",
-      "sha256": "3573b17a1808180a4bbb4a5d6a4c935dd61bcdaa1b46e54e336ea0ff0ff6b9f0"
-    },
-    {
-      "bytes": 12002,
-      "path": "test/native-routes.test.mjs",
-      "sha256": "a76ff465f21b0674ce727356d03fac1f0bc932d9d74b52df75bec28ea61e9c5b"
-    },
-    {
-      "bytes": 3147,
-      "path": "test/permissions.test.mjs",
-      "sha256": "4bb0c11dcbdbd6d44c1e727fcc8d97789a36417709900032628e8771c811cdfa"
-    },
-    {
-      "bytes": 51007,
-      "path": "test/server.test.mjs",
-      "sha256": "2b6f2709ea8c68fee265e73bc1a196f3a90d8072133fd41df0480ccc4c92d270"
-    },
-    {
-      "bytes": 6178,
-      "path": "test/submitted-messages.test.mjs",
-      "sha256": "12457a0cf8bfbbb9b14fd43a00175d384fce635c2dd8df49dd6dec752ccbf0de"
-    },
-    {
-      "bytes": 35785,
-      "path": "test/tasks.test.mjs",
-      "sha256": "8bb6738869c706b449272ff3ea80848d0f3e952280313ec3567100682a71148d"
-    },
-    {
-      "bytes": 5001,
-      "path": "test/tunnel.test.mjs",
-      "sha256": "044a2ef87175ac6d1f94f838a3cced732b79c759492a7e5b40e3c8b0b17fc725"
-    },
-    {
-      "bytes": 18678,
-      "path": "test/update-installer.test.mjs",
-      "sha256": "65fb4daa47651fbefc9a97d5997b1e1388b8012e35f2be97075e214a5e631107"
-    },
-    {
-      "bytes": 28842,
-      "path": "test/updater.test.mjs",
-      "sha256": "f057185a17d5aa1570d3420c491d2061b242f17e6a292acb9d3cbc35fc383d95"
+      "bytes": 1256,
+      "path": "tools/Install-Plugin.ps1",
+      "sha256": "4aef2e9a97a784cf61766c0491743ccc2c783560f8a699842ea9856c557f8d9b"
     },
     {
       "bytes": 25161,
@@ -384,8 +334,8 @@
   ],
   "name": "Codex 移动助手",
   "platform": "Windows 11 x64",
-  "releaseNotes": "V1.3.0 · 分区显示与 Codex 插件\n\n- 手机按桌面真实分区、项目与聊天显示，保留顺序、独立聊天与空自定义分区；分别记忆 Codex/GPT 的折叠状态，手动刷新同步调整。\n- 新增 Codex 内嵌插件入口，包含连接手机、设备管理、手机权限、使用说明、更新与关于；独立软件和网页继续可用。\n- 插件采用蓝色界面与原图标，详情页直接打开与设置；扫码后在当前页直接批准设备。网页保持原有视觉风格。\n- 软件与插件共享同一后台服务、配置和配对；插件启动后台时不弹出管理网页。\n- 插件自身支持检查更新、一键更新和自动更新，区分运行、安装、最新与待重新加载状态；自动安装默认关闭，任务繁忙时等待。\n- 保留 V1.2 的 GPT 文字续聊、Codex 附件与原图、文件浏览下载、消息回执、模型与思考强度、运行中引导、支持的停止与审批、外观设置、反馈和赞助。\n- 保留软件启动后及每 6 小时的更新检查、版本说明和“下次更新前不再提示”（仅本版本不再提示）；关闭自动安装仍会提醒新版。\n\n三种专用版统一为 1.3.0。V1.2 用户沿用原更新入口；本地运行组件、配对、权限与项目保持保留。插件首次使用需要单独安装。桌面原聊天的停止与审批仍受接口能力限制。\n\n插件使用教学\n\n1. 下载对应系统的 V1.3 完整软件包和 codex-mobile-plugin-1.3.0.zip，分别完整解压；已有 1.3 软件的用户直接使用现有软件目录。\n2. Windows 在插件目录打开 PowerShell，运行 .\\Install-Plugin.ps1 -InstallationRoot '软件目录绝对路径' -DefaultCwd '已有项目目录绝对路径' -Register。macOS 在插件目录运行 bash ./Install-Plugin.command '软件目录绝对路径' --default-cwd '已有项目目录绝对路径' --register。把示例路径换成自己的实际目录。\n3. 在 Codex 插件详情点击“打开插件”直接进入连接页，或从详情设置入口修改权限和自动更新。后台自动启动或复用，不新建聊天；对话调用“打开移动助手管理面板”也继续支持。\n4. 同一 Wi-Fi 下生成局域网二维码；外网使用时先开启互联网连接，再生成外网二维码。手机扫码后，当前页面直接出现待授权设备，点击“批准连接”即可，不必进入设备栏目。二维码两分钟有效且仅用一次。\n5. “手机权限”内分别控制审批、停止任务及访问其他目录，设置与软件共用。原桌面聊天操作仍受 Codex 接口限制。\n6. “更新”内分别检查插件和后台的新版本，点击对应的一键更新按钮；需要自动安装时开启相应开关，默认关闭。任务繁忙时等待空闲。\n7. 插件显示运行、已安装、最新三个版本。出现“待 Codex 重新加载”时按提示重新加载插件，必要时结束手头工作后重新打开 Codex，再核对运行版本。后台更新可能改变互联网临时地址，但保留配对和权限。\n8. 使用说明、连接诊断与关于信息均在插件面板内。详细步骤见发布包 docs/V1.3.0-PLUGIN-GUIDE.md；独立软件启动入口保持可用。",
+  "releaseNotes": "V1.3.1 · 软件包内置插件一键安装\n\n- Windows 11、Windows 10、macOS 软件与插件统一为 1.3.1。\n- 完整软件包已经包含插件和安装工具，不用另外下载插件。Windows 根目录新增 Install-Plugin.cmd；macOS 根目录新增 Install-Plugin.command。\n- 双击后直接绑定所在软件目录，使用包内 Node.js 完成插件注册，无需 npm、手动输入命令或添加插件市场。\n- 安装时不必提前打开 Codex，但必须已经安装 Codex。工具不模拟鼠标键盘、不操作其他窗口、不打开浏览器或登录窗口，也不会强制重启 Codex。\n- 保留软件网页、蓝白插件界面、原图标、当前页批准设备、手机权限和更新功能。\n\n插件使用教学\n\n1. 下载与你系统对应的 1.3.1 完整软件 ZIP，完整解压到可写目录。不要在压缩包内直接运行，也不要下载 Source code 代替软件包。\n2. Windows 双击软件文件夹根目录 Install-Plugin.cmd；macOS 双击同目录 Install-Plugin.command。无需先启动软件或打开 Codex。\n3. 安装完成后自行打开 Codex，进入“插件 → Codex 移动助手”，点“打开插件”。Codex 已经运行时可关闭再启用本插件，必要时自行重开 Codex。\n4. 确认电脑端 Codex 已登录，在插件中生成二维码。手机扫码后直接在当前插件页面点“批准连接”。设置入口可直接调整手机权限，也可以在对话中说“打开移动助手管理面板”。\n5. “更新”中分别管理软件与插件的检查更新、一键更新及自动更新。自动更新默认关闭；插件安装后需要宿主重新加载时会显示待生效。\n\n仍可使用 Codex-Mobile.exe（Windows）或 Start.command（macOS）启动独立软件。\n从旧版在线更新的用户可运行 tools/Install-Plugin.cmd（Windows）或 tools/Install-Plugin.command（macOS）；完整 ZIP 的根目录也提供入口。\n详细教学与故障处理见 docs/V1.3.1-PLUGIN-INSTALL.md。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
-  "version": "1.3.0"
+  "version": "1.3.1"
 }

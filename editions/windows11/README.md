@@ -1,14 +1,18 @@
-# Codex 移动助手 · Windows 11 专用版 V1.3.0
+# Codex 移动助手 · Windows 11 专用版 V1.3.1
 
-版本：**1.3.0** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [反馈邮件](mailto:lzyuan666666@gmail.com)
+版本：**1.3.1** · 作者：[maxlzyver](https://github.com/maxlzyver) · [项目仓库](https://github.com/maxlzyver/codex-mobile-editions) · [反馈邮件](mailto:lzyuan666666@gmail.com)
 
 在手机浏览器查看电脑 Codex 的任务、发送指令、选择模型和思考强度，并预览、下载本地项目文件。支持同一 Wi-Fi 配对，以及 Cloudflare 临时互联网连接。主题、字号、字体种类、主色和文字颜色可在“设置”调整；赞助自愿，不影响功能使用。
 
 这是独立社区工具。手机沿用电脑已登录的 Codex，无需再次输入 OpenAI 账号或 API 密钥；首次连接仍需扫码并由电脑批准。
 
+## V1.3.1 更新
+
+完整软件包已包含插件，双击根目录 `Install-Plugin.cmd` 即可安装，安装时不必提前打开 Codex。工具不会控制鼠标键盘或其他窗口。安装后自行打开 Codex，在插件中扫码并批准手机连接；独立软件仍照常使用。详见 [本版说明](docs/UPDATE-NOTES.md) 和 [插件一键安装教学](docs/V1.3.1-PLUGIN-INSTALL.md)。
+
 ## V1.3.0 更新
 
-手机侧栏新增真实分区、项目与聊天的层级显示，分别记忆 Codex/GPT 折叠状态；新增 Codex 内嵌插件管理入口，保留独立软件使用方式。两种入口共享服务、手机权限与设备配对，插件自身支持更新检查、一键更新和自动更新。保留 V1.2 全部既有功能。详情见 [本版说明](docs/UPDATE-NOTES.md)、[功能范围](docs/V1.3.0-FEATURES.md)和[升级说明](docs/V1.3.0-UPGRADE.md)。
+手机侧栏新增真实分区、项目与聊天的层级显示，分别记忆 Codex/GPT 折叠状态；新增 Codex 内嵌插件管理入口，保留独立软件使用方式。两种入口共享服务、手机权限与设备配对，插件自身支持更新检查、一键更新和自动更新。保留 V1.2 全部既有功能。详情见 [V1.3.0 原版说明](docs/V1.3.0-UPDATE-NOTES.md)、[功能范围](docs/V1.3.0-FEATURES.md)和[升级说明](docs/V1.3.0-UPGRADE.md)。
 
 ## V1.2.0 更新
 
@@ -21,10 +25,10 @@
 
 ## 本版适用范围
 
-当前版本为 **V1.3.0**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.0)。
+当前版本为 **V1.3.1**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-full)。
 
 - 仅适用于 **Windows 11、系统内部版本 22000 或更新、原生 AMD64/x64**。拒绝 ARM64（包括 x64 模拟运行）和 32 位系统，也不会安装其他平台专用版。
-- 完整包为 **`codex-mobile-windows11-1.3.0-x64.zip`**，内置 Windows x64 Node.js 24 和 cloudflared；Codex 程序及账户不包含在内，需在目标电脑自行安装并登录兼容版本。
+- 完整包为 **`codex-mobile-windows11-1.3.1-x64.zip`**，内置 Windows x64 Node.js 24 和 cloudflared；Codex 程序及账户不包含在内，需在目标电脑自行安装并登录兼容版本。
 - 手机使用支持现代 JavaScript 和 Cookie 的浏览器，无需安装本工具的手机 App。
 - 电脑必须开机、联网、不休眠，移动助手后台必须运行；继续原桌面聊天还需兼容的 Codex 桌面端保持运行。
 

@@ -19,8 +19,8 @@ using System.Reflection;
 [assembly: AssemblyProduct("Codex 移动助手 · Windows 11 专用版")]
 [assembly: AssemblyCompany("maxlzyver")]
 [assembly: AssemblyCopyright("Copyright © maxlzyver")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.1.0")]
+[assembly: AssemblyFileVersion("1.3.1.0")]
 
 namespace CodexMobile
 {
@@ -98,7 +98,7 @@ namespace CodexMobile
         internal const string EditionId = "windows11";
         internal const string EditionLabel = "Windows 11 专用版";
         internal const string Platform = "Windows 11 x64";
-        internal const string Version = "1.3.0";
+        internal const string Version = "1.3.1";
         internal const string DisplayName = "Codex 移动助手 · Windows 11 专用版";
         internal static readonly long StartedAt = (long)(Process.GetCurrentProcess().StartTime.ToUniversalTime() - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
 

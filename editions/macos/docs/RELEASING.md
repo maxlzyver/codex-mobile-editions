@@ -4,7 +4,7 @@
 
 ## 目录约定
 
-三个平台分别位于 `editions/windows11`、`editions/windows10`、`editions/macos`。每个目录的 `edition.json` 固定平台身份、更新路径、版本与完整 ZIP 文件名。初始均为 `1.0.0`，当前三版为 `1.3.0`，之后可以独立升版。
+三个平台分别位于 `editions/windows11`、`editions/windows10`、`editions/macos`。每个目录的 `edition.json` 固定平台身份、更新路径、版本与完整 ZIP 文件名。初始均为 `1.0.0`，当前三版为 `1.3.1`，之后可以独立升版。
 
 `update.json` 是打包工具生成的轻量更新清单，必须与同目录程序文件保持一致。不要手工修改哈希，也不要把 ZIP 当作唯一仓库内容。客户端从固定提交下载对应目录，不从 Release 选包。
 
