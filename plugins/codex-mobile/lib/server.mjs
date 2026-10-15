@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -15,6 +15,13 @@ const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const pkg = await readJson(path.join(rootDir, 'plugin.json'));
 const dataDir = dataDirectory(), config = await loadConfig(dataDir), backend = new Backend(config);
 await verifyRuntime(config);
+// Windows holds a directory handle for each process cwd. Keep every MCP
+// instance outside the replaceable plugin cache so Codex can refresh it live.
+await mkdir(dataDir, { recursive: true, mode: 0o700 });
+process.chdir(dataDir);
+// An old process must still serve its matching UI after the host replaces its
+// cache directory. A new process reads the newly installed version separately.
+const appHtml = await readFile(path.join(rootDir, 'ui/app.html'), 'utf8');
 const resourceUri = `ui://codex-mobile/manager-${pkg.version}.html`;
 const updater = new PluginUpdater({ rootDir, dataDir, config, loadedVersion: pkg.version, isBusy: () => backend.busy(), refreshHost: async () => {
   let binary = config.codexBinary;
@@ -34,12 +41,13 @@ const uiMeta = { ui: { resourceUri }, 'openai/outputTemplate': resourceUri, 'ope
 const result = (value, summary = '操作完成。', privateValue) => ({ content: [{ type: 'text', text: summary }], structuredContent: value, ...(privateValue ? { _meta: { mobile: privateValue } } : {}) });
 const safe = handler => async (...args) => { try { return await handler(...args); } catch (error) { return { isError: true, content: [{ type: 'text', text: String(error.message).replace(/#owner=[\w-]+/g, '#owner=[hidden]').slice(0, 700) }] }; } };
 async function snapshot({ start = false, focus = 'connect' } = {}) {
+  await updater.refreshSharedState();
   let state = null, error = null;
   try { state = await backend.status({ start }); } catch (failure) { error = failure.message; }
   return { configured: Boolean(config), pluginVersion: pkg.version, pluginUpdate: updater.getState(), backend: state, error, focus };
 }
 server.registerResource('mobile-manager', resourceUri, { mimeType: 'text/html;profile=mcp-app', description: '移动助手内嵌管理页面' }, async () => ({ contents: [{
-  uri: resourceUri, mimeType: 'text/html;profile=mcp-app', text: await readFile(path.join(rootDir, 'ui/app.html'), 'utf8'),
+  uri: resourceUri, mimeType: 'text/html;profile=mcp-app', text: appHtml,
   _meta: { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } }, 'openai/widgetPrefersBorder': false,
     'openai/widgetDescription': 'Codex 移动助手：连接、设备、权限、使用说明、更新与关于。', 'openai/widgetCSP': { connect_domains: [], resource_domains: [] } },
 }] }));
@@ -69,6 +77,7 @@ appTool('mobile_plugin_auto_update', '设置插件自身自动更新', z.object(
 const settingLabels = { allowMobileApprovals: '允许手机处理任务审批', allowMobileStop: '允许手机停止任务', allowOtherFiles: '允许手机访问其他目录', backendAutoUpdate: '自动更新助手后台', pluginAutoUpdate: '自动更新移动助手插件' };
 const settingsSchema = { type: 'object', properties: Object.fromEntries(Object.entries(settingLabels).map(([key, title]) => [key, { type: 'boolean', title }])), required: Object.keys(settingLabels), additionalProperties: false };
 async function settingValues() {
+  await updater.refreshSharedState();
   let permissions = {}, backendAutoUpdate = false;
   try { const state = await backend.status(); permissions = state.permissions; backendAutoUpdate = state.updates?.autoUpdate === true; }
   catch { if (config) { try { await backend.validate(config.installationRoot); permissions = await readJson(path.join(config.installationRoot, '.runtime/mobile-permissions.json')); } catch { } try { backendAutoUpdate = (await readJson(path.join(config.installationRoot, '.runtime/updates/settings.json'))).autoUpdate === true; } catch { } } }

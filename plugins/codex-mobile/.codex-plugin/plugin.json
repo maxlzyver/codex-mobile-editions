@@ -11,6 +11,9 @@
     "shortDescription": "手机连接与权限管理，直接在 Codex 内完成",
     "developerName": "maxlzyver",
     "category": "Productivity",
+    "brandColor": "#3565E8",
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png",
     "defaultPrompt": ["打开移动助手管理面板", "检查手机连接状态"]
   }
 }

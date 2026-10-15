@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { PluginUpdater, validateManifest, validatePluginPath } from '../lib/plugin-updater.mjs';
 import { writeJson, readJson } from '../lib/config.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const commit = 'a'.repeat(40);
 async function fixture(t, overrides = {}) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'codex-plugin-update-'));
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'codex-plugin-update-')));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const root = path.join(directory, '.codex/plugins/cache/local/mobile/local'), source = path.join(directory, 'marketplace/plugins/codex-mobile'), dataDir = path.join(directory, 'data');
   await mkdir(root, { recursive: true }); await mkdir(source, { recursive: true });
@@ -52,8 +53,10 @@ test('self update changes code, UI, skills and identity in source, preserves dat
   assert.equal(loaded.getState().pendingRestart, false);
 });
 test('busy automatic update waits without downloading and resumes after idle', async t => {
-  let busy = true; const f = await fixture(t, { isBusy: async () => busy, retryMs: 10, intervalMs: 100000 });
-  await f.updater.configure({ autoUpdate: true }); await f.updater.cycle(); f.updater.close();
+  let busy = true; const f = await fixture(t, { isBusy: async () => busy, retryMs: 1000, intervalMs: 100000 });
+  await f.updater.configure({ autoUpdate: true });
+  for (let attempt = 0; attempt < 100 && f.updater.getState().status !== 'waiting'; attempt++) await delay(10);
+  f.updater.close();
   assert.equal(f.updater.getState().status, 'waiting'); assert.equal(f.calls, 2);
   busy = false; await f.updater.install();
   assert.equal(f.updater.getState().installedVersion, '1.3.1');
@@ -100,4 +103,55 @@ test('metadata write failure restores program files and original update manifest
   await f.updater.check(); await assert.rejects(f.updater.install(), /不是普通文件/);
   assert.equal((await readJson(path.join(f.source, 'plugin.json'))).version, '1.3.0');
   assert.equal((await readJson(path.join(f.source, 'update.json'))).version, '1.3.0');
+});
+
+test('two plugin instances synchronize shared auto setting and installed version without changing loaded code', async t => {
+  const f = await fixture(t); f.updater.close();
+  const peer = new PluginUpdater({ rootDir: f.root, dataDir: f.dataDir, config: f.config, loadedVersion: '1.3.0', fetchImpl: f.fetchImpl, isBusy: async () => false });
+  t.after(() => peer.close()); await peer.ready; peer.close();
+  await f.updater.configure({ autoUpdate: true });
+  assert.equal((await peer.refreshSharedState()).autoUpdate, true);
+  await peer.configure({ autoUpdate: false });
+  assert.equal((await f.updater.refreshSharedState()).autoUpdate, false);
+  await peer.check(); assert.equal(peer.getState().hasUpdate, true);
+  await f.updater.check(); await f.updater.install();
+  const synced = await peer.refreshSharedState();
+  assert.equal(synced.installedVersion, '1.3.1'); assert.equal(synced.loadedVersion, '1.3.0');
+  assert.equal(synced.pendingRestart, true); assert.equal(synced.hasUpdate, false); assert.equal(synced.status, 'pending_restart');
+  const calls = f.calls; await peer.install(); assert.equal(f.calls, calls);
+});
+
+test('shared refresh ignores an uncommitted identity and preserves local install progress', async t => {
+  const f = await fixture(t); f.updater.close();
+  await writeJson(path.join(f.dataDir, 'plugin-update.lock'), { pid: process.pid });
+  await writeJson(path.join(f.source, 'plugin.json'), { name: 'codex-mobile', version: '1.3.1' });
+  await writeJson(path.join(f.dataDir, 'update-settings.json'), { autoUpdate: true });
+  const locked = await f.updater.refreshSharedState(); assert.equal(locked.installedVersion, '1.3.0'); assert.equal(locked.autoUpdate, true);
+  f.updater.operation = Promise.resolve(); f.updater.patch({ status: 'installing' });
+  await rm(path.join(f.dataDir, 'plugin-update.lock'));
+  const active = await f.updater.refreshSharedState(); assert.equal(active.status, 'installing'); assert.equal(active.installedVersion, '1.3.0');
+  f.updater.operation = null;
+  const committed = await f.updater.refreshSharedState(); assert.equal(committed.installedVersion, '1.3.1'); assert.equal(committed.status, 'pending_restart');
+});
+
+test('a scheduled peer re-reads another instance opt-out before deciding to auto-install', async t => {
+  const f = await fixture(t); f.updater.close(); await f.updater.configure({ autoUpdate: true });
+  const peer = new PluginUpdater({ rootDir: f.root, dataDir: f.dataDir, config: f.config, loadedVersion: '1.3.0', fetchImpl: f.fetchImpl, isBusy: async () => false });
+  t.after(() => peer.close()); await peer.ready; assert.equal(peer.getState().autoUpdate, true);
+  await f.updater.configure({ autoUpdate: false }); await peer.cycle(); peer.close();
+  assert.equal(peer.getState().autoUpdate, false); assert.equal(peer.getState().hasUpdate, true);
+  assert.equal((await readJson(path.join(f.source, 'plugin.json'))).version, '1.3.0');
+  assert.equal(f.calls, 2);
+});
+
+test('one-click update waits for idle and retries without enabling automatic updates', async t => {
+  let busy = true; const f = await fixture(t, { isBusy: async () => busy, retryMs: 20, intervalMs: 100000 });
+  const waiting = await f.updater.install(); assert.equal(waiting.status, 'waiting'); assert.equal(waiting.autoUpdate, false);
+  assert.equal((await f.updater.refreshSharedState()).status, 'waiting');
+  assert.equal(f.calls, 2); assert.equal(f.updater.manualPending, true);
+  busy = false;
+  for (let attempt = 0; attempt < 100 && f.updater.getState().installedVersion !== '1.3.1'; attempt++) await delay(20);
+  assert.equal(f.updater.getState().installedVersion, '1.3.1'); assert.equal(f.updater.getState().autoUpdate, false);
+  assert.equal(f.updater.manualPending, false); assert.equal(f.refreshed, 1);
+  assert.deepEqual(await readJson(path.join(f.dataDir, 'devices.json')), { private: 'persist' });
 });

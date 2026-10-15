@@ -49,13 +49,36 @@ export class PluginUpdater {
   constructor({ rootDir, dataDir, config, loadedVersion, isBusy = async () => true, fetchImpl = fetch, refreshHost, intervalMs = 6 * 60 * 60 * 1000, retryMs = 60000 }) {
     Object.assign(this, { rootDir, dataDir, config, loadedVersion, isBusy, fetch: fetchImpl, refreshHost, intervalMs, retryMs });
     this.state = { loadedVersion, installedVersion: loadedVersion, latestVersion: null, autoUpdate: false, status: 'idle', hasUpdate: false, pendingRestart: false, checkedAt: null, releaseNotes: '', error: null, hostRefresh: null };
-    this.ready = this.initialize(); this.operation = null; this.timer = null; this.closed = false; this.candidate = null;
+    this.operation = null; this.timer = null; this.closed = false; this.candidate = null; this.settingsGeneration = 0; this.manualPending = false;
+    this.ready = this.refreshSharedState();
   }
-  async initialize() {
-    try { this.state.autoUpdate = (await readJson(path.join(this.dataDir, 'update-settings.json'))).autoUpdate === true; } catch { }
-    try { const pkg = await readJson(path.join(this.config.pluginSourceRoot, 'plugin.json')); if (pkg.name === 'codex-mobile' && VERSION.test(pkg.version)) this.state.installedVersion = pkg.version; } catch { }
-    this.state.pendingRestart = compareVersions(this.state.installedVersion, this.loadedVersion) > 0;
-    if (this.state.pendingRestart) this.state.status = 'pending_restart';
+  async refreshSharedState() {
+    // Every Codex surface can have its own stdio process. Settings and the source
+    // identity belong to their shared stable directory, not to one process.
+    const generation = this.settingsGeneration;
+    let autoUpdate = false;
+    try { autoUpdate = (await readJson(path.join(this.dataDir, 'update-settings.json'))).autoUpdate === true; } catch { }
+    if (generation === this.settingsGeneration) this.state.autoUpdate = autoUpdate;
+    if (!this.config?.pluginSourceRoot || (this.operation && ['downloading', 'installing'].includes(this.state.status))) return this.getState();
+    const locked = async () => { try { await lstat(path.join(this.dataDir, 'plugin-update.lock')); return true; } catch (error) { return error.code !== 'ENOENT'; } };
+    try {
+      // The root identity is written before the transaction metadata. Do not
+      // announce it while another process can still roll back the transaction.
+      if (await locked()) return this.getState();
+      const pkg = await readJson(path.join(this.config.pluginSourceRoot, 'plugin.json'));
+      if (pkg.name !== 'codex-mobile' || !VERSION.test(pkg.version) || await locked()) return this.getState();
+      const changed = pkg.version !== this.state.installedVersion;
+      this.state.installedVersion = pkg.version;
+      this.state.pendingRestart = compareVersions(pkg.version, this.loadedVersion) > 0;
+      this.state.hasUpdate = VERSION.test(this.state.latestVersion || '') && compareVersions(this.state.latestVersion, pkg.version) > 0;
+      if (!this.operation && (changed || ['available', 'waiting', 'current', 'pending_restart'].includes(this.state.status))) {
+        const waiting = this.state.status === 'waiting' && (this.manualPending || this.state.autoUpdate);
+        this.state.status = this.state.hasUpdate ? waiting ? 'waiting' : 'available' : this.state.pendingRestart ? 'pending_restart' : this.state.latestVersion ? 'current' : 'idle';
+        if (!this.state.hasUpdate) this.manualPending = false;
+        if (changed) { this.state.error = null; this.state.hostRefresh = null; }
+      } else if (!this.operation && this.state.pendingRestart && this.state.status === 'idle') this.state.status = 'pending_restart';
+    } catch { /* A missing/unreadable source keeps the last confirmed version. */ }
+    return this.getState();
   }
   getState() { return structuredClone(this.state); }
   patch(value) { Object.assign(this.state, value); return this.getState(); }
@@ -70,6 +93,7 @@ export class PluginUpdater {
   async request(url, limit) { return bounded(await this.fetch(url, { signal: AbortSignal.timeout(30000), redirect: 'error', headers: { accept: 'application/json', 'user-agent': 'codex-mobile-plugin' } }), limit); }
   async check() {
     await this.ready;
+    await this.refreshSharedState();
     if (this.operation) return this.getState();
     this.operation = (async () => {
       this.patch({ status: 'checking', error: null });
@@ -79,6 +103,7 @@ export class PluginUpdater {
         if (!/^[a-f0-9]{40}$/.test(commit || '')) throw new Error('插件发布提交无效。');
         const manifest = validateManifest(JSON.parse((await this.request(`https://raw.githubusercontent.com/${REPOSITORY}/${commit}/${PREFIX}/update.json`, 512000)).toString()));
         this.candidate = { commit, manifest };
+        await this.refreshSharedState();
         const hasUpdate = compareVersions(manifest.version, this.state.installedVersion) > 0;
         return this.patch({ latestVersion: manifest.version, checkedAt: Date.now(), releaseNotes: String(manifest.releaseNotes || '').slice(0, 12000), hasUpdate,
           status: hasUpdate ? 'available' : this.state.pendingRestart ? 'pending_restart' : 'current' });
@@ -99,18 +124,20 @@ export class PluginUpdater {
     }
     throw new Error('无法取得插件更新锁。');
   }
-  async install() {
+  async install({ automatic = false } = {}) {
     await this.ready;
+    await this.refreshSharedState();
     if (this.operation) return this.getState();
     if (!this.candidate) await this.check();
-    if (!this.state.hasUpdate) return this.getState();
+    if (!this.state.hasUpdate) { this.manualPending = false; return this.getState(); }
+    if (!automatic) this.manualPending = true;
     this.operation = (async () => {
       let unlock, job; const committed = [];
       try {
         const source = await this.source(); unlock = await this.lock();
         const actual = await readJson(path.join(source, 'plugin.json'));
-        if (compareVersions(this.candidate.manifest.version, actual.version) <= 0) return this.patch({ installedVersion: actual.version, hasUpdate: false, pendingRestart: actual.version !== this.loadedVersion, status: actual.version !== this.loadedVersion ? 'pending_restart' : 'current' });
-        if (await this.isBusy()) return this.patch({ status: 'waiting', error: null });
+        if (compareVersions(this.candidate.manifest.version, actual.version) <= 0) { this.manualPending = false; return this.patch({ installedVersion: actual.version, hasUpdate: false, pendingRestart: actual.version !== this.loadedVersion, status: actual.version !== this.loadedVersion ? 'pending_restart' : 'current' }); }
+        if (await this.isBusy()) { this.schedule(this.retryMs); return this.patch({ status: 'waiting', error: null }); }
         const { commit, manifest } = this.candidate;
         job = path.join(this.dataDir, 'updates', `plugin-${Date.now()}-${randomBytes(4).toString('hex')}`);
         await mkdir(path.join(job, 'stage'), { recursive: true, mode: 0o700 });
@@ -127,7 +154,7 @@ export class PluginUpdater {
           || packageIdentity.name !== 'codex-mobile-plugin' || packageIdentity.version !== manifest.version) throw new Error('插件兼容清单或 package.json 的身份/版本与更新清单不一致。');
         const mcp = materializeMcp(await readJson(path.join(job, 'stage/mcp.json')), this.config, this.dataDir);
         await writeJson(path.join(job, 'stage/mcp.json'), mcp);
-        if (await this.isBusy()) return this.patch({ status: 'waiting' });
+        if (await this.isBusy()) { this.schedule(this.retryMs); return this.patch({ status: 'waiting' }); }
         this.patch({ status: 'installing' });
         // Commit the identity last, after the complete code, UI and skill set.
         const files = [...manifest.files].sort((a, b) => Number(a.path === 'plugin.json') - Number(b.path === 'plugin.json'));
@@ -150,8 +177,10 @@ export class PluginUpdater {
           try { await this.refreshHost(); hostRefresh = '已刷新宿主插件安装；当前会话仍需重新加载或重启 Codex。'; }
           catch { hostRefresh = '插件源已更新，宿主刷新未完成。请在插件目录重新加载后重启 Codex。'; }
         }
+        this.manualPending = false;
         return this.patch({ installedVersion: manifest.version, hasUpdate: false, pendingRestart: manifest.version !== this.loadedVersion, status: 'pending_restart', hostRefresh });
       } catch (error) {
+        this.manualPending = false;
         let rollbackFailed = false;
         for (const file of committed.reverse()) { try { if (file.existed) await copyFile(file.backup, file.target); else await rm(file.target, { force: true }); } catch { rollbackFailed = true; } }
         this.patch({ status: 'error', error: rollbackFailed ? '插件更新失败且回滚未完成，请重新运行安装工具。' : error.message }); throw error;
@@ -161,13 +190,15 @@ export class PluginUpdater {
   }
   async configure({ autoUpdate }) {
     if (typeof autoUpdate !== 'boolean') throw new Error('autoUpdate 必须是布尔值。'); await this.ready;
-    await writeJson(path.join(this.dataDir, 'update-settings.json'), { autoUpdate }); this.patch({ autoUpdate }); this.schedule(0); return this.getState();
+    this.settingsGeneration++;
+    await writeJson(path.join(this.dataDir, 'update-settings.json'), { autoUpdate }); this.settingsGeneration++;
+    this.patch({ autoUpdate }); this.schedule(0); return this.getState();
   }
   schedule(ms) { if (this.timer) clearTimeout(this.timer); if (!this.closed) { this.timer = setTimeout(() => this.cycle(), ms); this.timer.unref(); } }
   async cycle() {
     await this.ready; if (this.closed) return;
     let next = this.intervalMs;
-    try { if (this.operation) { next = this.retryMs; return; } await this.check(); if (this.state.autoUpdate && this.state.hasUpdate) { await this.install(); if (this.state.status === 'waiting') next = this.retryMs; } }
+    try { await this.refreshSharedState(); if (this.operation) { next = this.retryMs; return; } await this.check(); await this.refreshSharedState(); if ((this.manualPending || this.state.autoUpdate) && this.state.hasUpdate) { await this.install({ automatic: !this.manualPending }); if (this.state.status === 'waiting') next = this.retryMs; } }
     catch { next = this.intervalMs; }
     finally { this.schedule(next); }
   }

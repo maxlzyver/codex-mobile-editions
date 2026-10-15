@@ -8,7 +8,7 @@ import { setup } from '../scripts/setup.mjs';
 import { readJson, writeJson } from '../lib/config.mjs';
 const source = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 test('setup binds bundled Node in Chinese space paths and preserves settings across reinstall', async t => {
-  const temp = await mkdtemp(path.join(os.tmpdir(), '插件 setup ')); t.after(() => rm(temp, { recursive: true, force: true }));
+  const temp = await realpath(await mkdtemp(path.join(os.tmpdir(), '插件 setup '))); t.after(() => rm(temp, { recursive: true, force: true }));
   const install = path.join(temp, '完整 软件'), dataDir = path.join(temp, '插件 数据'), project = path.join(temp, '项目');
   await mkdir(install); await mkdir(project);
   const validate = async directory => ({ root: directory, nodePath: path.join(directory, 'runtime/node.exe'), profile: { id: 'windows11', version: '1.3.0' } });
