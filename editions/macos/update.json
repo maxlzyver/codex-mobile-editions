@@ -12,9 +12,9 @@
       "sha256": "2ae4212406f699b8574cf7c4fb6bf152ef306224b8d03027c9bc1343f507f827"
     },
     {
-      "bytes": 8368,
+      "bytes": 8373,
       "path": "README.md",
-      "sha256": "cb06cac1e37660ea0f9041130663d8972d869e84239bb5122e4212b24ee4f43e"
+      "sha256": "898fc4f0cf723b37b927e8f3a10272c8096a2167feabe7f14eed60a811d8bf66"
     },
     {
       "bytes": 456,
@@ -42,9 +42,9 @@
       "sha256": "b84ada33e0aef1c716a408c9240a0441745870e56421af8dd18c2fea2ce8da0e"
     },
     {
-      "bytes": 2002,
+      "bytes": 2494,
       "path": "docs/UPDATE-NOTES.md",
-      "sha256": "4cff42ba5814a9c268569cc2c02bf7544a95fdc0f3b255dfaf3060163eb67820"
+      "sha256": "73b8b387e1ff7cad663e1b9cb61527c9b3ec20b945ba743f9ab00198186b882f"
     },
     {
       "bytes": 2828,
@@ -87,9 +87,9 @@
       "sha256": "2dc85289b7366a1053e899bc960d5a50e74d07331952c2710d28bd5305dcb40f"
     },
     {
-      "bytes": 3928,
+      "bytes": 4188,
       "path": "docs/V1.3.1-PLUGIN-INSTALL.md",
-      "sha256": "69fd7e9d6dc4cf5b2c4689d27d1b28816c35306725350145ca62e5bae0dce57d"
+      "sha256": "21ef46e18db43f157a4f677eba95c2122a516e2ec10113d8b8b6494904224ec6"
     },
     {
       "bytes": 247,
@@ -132,9 +132,9 @@
       "sha256": "23cc84ef652efc4282b1808f0bf3fcd0ee727d41b51d4f6e195b51b30b3768c9"
     },
     {
-      "bytes": 8116,
+      "bytes": 8400,
       "path": "lib/install-plugin.mjs",
-      "sha256": "0d165491d1f6bf7069cba5d21799ca135604d8d77cf306d4d8d768ef3561503d"
+      "sha256": "fc87382294904d3fb7736e9917ca4f78697673d239cbb701b61be5834ac63f73"
     },
     {
       "bytes": 9450,
@@ -157,9 +157,14 @@
       "sha256": "a15e417c87eb1ab417501ae5dc900c0e31b610dead231ca8ac0bce7b166be808"
     },
     {
-      "bytes": 2052323,
+      "bytes": 2058668,
       "path": "lib/plugin-bundle.json",
-      "sha256": "68d6c18e6828f2cf14deadc8e0c9ab8677eca69755973406ac6f960c9793cc40"
+      "sha256": "fd047c82a2d22269eab121c6469e4beab55233b24cc3ab683fd0ebf9640fcfd2"
+    },
+    {
+      "bytes": 1296,
+      "path": "lib/plugin-installer-shortcut.mjs",
+      "sha256": "48b76d447ee5a56378bae32e17180cd45085df887c08baec39e245c4bb40bb90"
     },
     {
       "bytes": 3674,
@@ -287,9 +292,9 @@
       "sha256": "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a"
     },
     {
-      "bytes": 35108,
+      "bytes": 35350,
       "path": "server.mjs",
-      "sha256": "17ff743ef235e5ce462f7e2d02471bb96a28c90db406d842381d19bb4f74eda0"
+      "sha256": "ce0b985d0c0e4beecda5841fd38380c150b895964aec326d47d32898b273352f"
     },
     {
       "bytes": 874,
@@ -314,7 +319,7 @@
   ],
   "name": "Codex 移动助手",
   "platform": "macOS universal",
-  "releaseNotes": "V1.3.1 · 软件包内置插件一键安装\n\n- Windows 11、Windows 10、macOS 软件与插件统一为 1.3.1。\n- 完整软件包已经包含插件和安装工具，不用另外下载插件。Windows 根目录新增 Install-Plugin.cmd；macOS 根目录新增 Install-Plugin.command。\n- 双击后直接绑定所在软件目录，使用包内 Node.js 完成插件注册，无需 npm、手动输入命令或添加插件市场。\n- 安装时不必提前打开 Codex，但必须已经安装 Codex。工具不模拟鼠标键盘、不操作其他窗口、不打开浏览器或登录窗口，也不会强制重启 Codex。\n- 保留软件网页、蓝白插件界面、原图标、当前页批准设备、手机权限和更新功能。\n\n插件使用教学\n\n1. 下载与你系统对应的 1.3.1 完整软件 ZIP，完整解压到可写目录。不要在压缩包内直接运行，也不要下载 Source code 代替软件包。\n2. Windows 双击软件文件夹根目录 Install-Plugin.cmd；macOS 双击同目录 Install-Plugin.command。无需先启动软件或打开 Codex。\n3. 安装完成后自行打开 Codex，进入“插件 → Codex 移动助手”，点“打开插件”。Codex 已经运行时可关闭再启用本插件，必要时自行重开 Codex。\n4. 确认电脑端 Codex 已登录，在插件中生成二维码。手机扫码后直接在当前插件页面点“批准连接”。设置入口可直接调整手机权限，也可以在对话中说“打开移动助手管理面板”。\n5. “更新”中分别管理软件与插件的检查更新、一键更新及自动更新。自动更新默认关闭；插件安装后需要宿主重新加载时会显示待生效。\n\n仍可使用 Codex-Mobile.exe（Windows）或 Start.command（macOS）启动独立软件。\n从旧版在线更新的用户可运行 tools/Install-Plugin.cmd（Windows）或 tools/Install-Plugin.command（macOS）；完整 ZIP 的根目录也提供入口。\n详细教学与故障处理见 docs/V1.3.1-PLUGIN-INSTALL.md。",
+  "releaseNotes": "V1.3.1 · 软件包内置插件一键安装\n\n- Windows 11、Windows 10、macOS 软件与插件统一为 1.3.1。\n- 完整软件包已经包含插件和安装工具，不用另外下载插件。Windows 根目录新增 Install-Plugin.cmd；macOS 根目录新增 Install-Plugin.command。\n- 双击后直接绑定所在软件目录，使用包内 Node.js 完成插件注册，无需 npm、手动输入命令或添加插件市场。\n- 安装时不必提前打开 Codex，但必须已经安装 Codex。工具不模拟鼠标键盘、不操作其他窗口、不打开浏览器或登录窗口，也不会强制重启 Codex。\n- 保留软件网页、蓝白插件界面、原图标、当前页批准设备、手机权限和更新功能。\n\n插件使用教学\n\n1. 下载与你系统对应的 1.3.1 完整软件 ZIP，完整解压到可写目录。不要在压缩包内直接运行，也不要下载 Source code 代替软件包。\n2. Windows 双击软件文件夹根目录 Install-Plugin.cmd；macOS 双击同目录 Install-Plugin.command。无需先启动软件或打开 Codex。\n3. 安装完成后自行打开 Codex，进入“插件 → Codex 移动助手”，点“打开插件”。Codex 已经运行时可关闭再启用本插件，必要时自行重开 Codex。\n4. 确认电脑端 Codex 已登录，在插件中生成二维码。手机扫码后直接在当前插件页面点“批准连接”。设置入口可直接调整手机权限，也可以在对话中说“打开移动助手管理面板”。\n5. “更新”中分别管理软件与插件的检查更新、一键更新及自动更新。自动更新默认关闭；插件安装后需要宿主重新加载时会显示待生效。\n\n仍可使用 Codex-Mobile.exe（Windows）或 Start.command（macOS）启动独立软件。\n从旧版在线更新的用户可运行 tools/Install-Plugin.cmd（Windows）或 tools/Install-Plugin.command（macOS）；完整 ZIP 的根目录也提供入口。\n详细教学与故障处理见 docs/V1.3.1-PLUGIN-INSTALL.md。\n\n安装修正\n\n- 在线升级后首次启动会补齐根目录安装入口，已有文件保持原样。\n- 修复卸载插件后旧插件源仍存在时的一键安装失败：识别并复用本插件原有有效配置，避免同名插件源冲突。\n- 安装失败日志增加阶段、退出码和经过处理的错误详情，便于定位原因。\n- 产品版本仍为 1.3.1；此前已经升级到同版本的用户不会再次收到自动安装，请使用修复后的完整软件包。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
   "version": "1.3.1"

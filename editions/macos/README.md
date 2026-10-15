@@ -23,7 +23,7 @@
 
 ## 系统与安装
 
-当前版本为 **V1.3.1**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-full)。
+当前版本为 **V1.3.1**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-rebuild.1)。
 
 - **macOS 14 或更新版本**，Apple 芯片或 Intel。完整包 `codex-mobile-macos-1.3.1-universal.zip` 包含两套 Node.js 24 和 cloudflared，按机器架构选择。
 - Mac 需自行安装并登录兼容的 Codex 桌面应用或 CLI；包内不包含 Codex 程序和账户。

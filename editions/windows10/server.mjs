@@ -19,6 +19,7 @@ import { NativeGPT } from './lib/native-gpt.mjs';
 import { APP_INFO } from './lib/app-info.mjs';
 import { UpdateManager } from './lib/updater.mjs';
 import { createInstaller } from './lib/update-installer.mjs';
+import { ensurePluginInstallerShortcut } from './lib/plugin-installer-shortcut.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -453,6 +454,7 @@ export async function createConsole(options = {}) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await ensurePluginInstallerShortcut(ROOT).catch(() => console.warn('未能补齐根目录插件安装入口；仍可使用 tools 内的安装工具。'));
   const app = await createConsole({ onShutdown: () => process.exit(0) });
   app.updater.startChecking();
   console.log(`Codex 移动助手 ${APP_INFO.version} is listening on http://127.0.0.1:${app.port}`);

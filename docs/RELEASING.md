@@ -52,6 +52,8 @@ V1.0.1 重制是一次保留软件版本号的例外。已装旧 V1.0.1 的更�
 
 先构建插件并运行 `python tools/package-plugin.py --build --output-dir <输出目录>`，再运行 `python tools/bundle-edition-plugin.py --write` 将同一份公开插件生成到三个软件目录。最后运行 `python tools/package-editions.py --build --output-dir <输出目录>`。插件源码或说明变动后需重新生成插件清单和软件内插件包，再打包软件；生成文件一起提交。
 
-软件完整 ZIP 根目录提供 Windows `Install-Plugin.cmd` 或 macOS `Install-Plugin.command`。根入口是打包时附加的快捷入口；在线更新清单使用 `tools/` 下的安装脚本与 `lib/` 内插件包，兼容旧版更新路径校验。教学见 `docs/V1.3.1-PLUGIN-INSTALL.md`。
+软件完整 ZIP 根目录提供 Windows `Install-Plugin.cmd` 或 macOS `Install-Plugin.command`。完整 ZIP 根入口由打包工具附加；在线更新后首次启动由 server 补齐缺失的根入口，已有文件保持原样。在线更新清单使用 `tools/` 下的安装脚本与 `lib/` 内插件包，兼容旧版更新路径校验。教学见 `docs/V1.3.1-PLUGIN-INSTALL.md`。
 
 本次产品版本统一为 `1.3.1`。原 `v1.3.1` 发布已锁定且仅有独立插件，完整软件使用 `v1.3.1-full` 发布标签，并设为最新发布。发布应先创建草稿、上传并核对全部附件，最后公开，避免附件锁定后遗漏软件包。
+
+1.3.1 安装修正同时更新在线升级源与完整软件包，修订发布使用 `v1.3.1-rebuild.1`，产品版本保持 1.3.1。更新器不会重复安装同版本；已经更新的用户可使用修复后的完整包，或针对已确认安装修复安装工具。

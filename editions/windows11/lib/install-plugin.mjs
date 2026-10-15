@@ -70,10 +70,12 @@ export async function extractBundle({ root = editionRoot, bundlePath = path.join
 export async function installBundledPlugin(options = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('请使用软件完整包自带的 Node.js 24 或更新版本。');
   const root = options.root || editionRoot, extracted = await extractBundle({ root });
-  const { installOneClick, installErrorMessage, resolveDataDirectory } = await import(pathToFileURL(path.join(extracted.source, 'scripts/one-click.mjs')).href);
-  const dataDir = await resolveDataDirectory({ dataDir: options.dataDir });
+  const { installOneClick, installErrorMessage, installDiagnostic, resolveDataDirectory } = await import(pathToFileURL(path.join(extracted.source, 'scripts/one-click.mjs')).href);
+  let dataDir;
+  try { dataDir = await resolveDataDirectory({ dataDir: options.dataDir, installationRoot: root }); }
+  catch (error) { const safe = new Error(installErrorMessage(error)); safe.diagnostic = installDiagnostic(error); throw safe; }
   try { return await installOneClick({ installationRoot: root, source: extracted.source, defaultCwd: options.defaultCwd, dataDir, documentsDir: options.documentsDir }); }
-  catch (error) { const safe = new Error(installErrorMessage(error)); safe.dataDir = dataDir; throw safe; }
+  catch (error) { const safe = new Error(installErrorMessage(error)); safe.dataDir = dataDir; safe.diagnostic = installDiagnostic(error); throw safe; }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -93,6 +95,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const result = await installBundledPlugin(options);
     const message = '插件已安装并绑定当前软件。无需提前打开 Codex；使用时打开 Codex，在插件详情点击“打开”。首次打开面板才启动后台，手机连接前请确保 Codex 已登录。';
     console.log(message); await record(message + '\n' + JSON.stringify(result, null, 2), result.dataDir);
-  } catch (error) { const message = String(error.message || '插件安装未完成，请重新完整解压软件包后重试。'); console.error(message); await record(message, error.dataDir); process.exitCode = 1; }
+  } catch (error) { const message = String(error.message || '插件安装未完成，请重新完整解压软件包后重试。') + (error.diagnostic ? '\n' + error.diagnostic : ''); console.error(message); await record(message, error.dataDir); process.exitCode = 1; }
   console.log(`安装结果：${resultFile}`);
 }

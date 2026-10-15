@@ -6,14 +6,14 @@
       "sha256": "a53cd3e68ba7fdaaaf9788af6bbb1f8d31897be9772a9c30ccb13435d3da9058"
     },
     {
-      "bytes": 5246,
+      "bytes": 5221,
       "path": "Install-Plugin.command",
-      "sha256": "d4c4868565de0f691d4b8533fbee03e458fbb18114d87ac283968d22aabf819a"
+      "sha256": "319161884d46373fdac8b9d26eda03818ab5b6affcaba111f91594c4c5f13114"
     },
     {
-      "bytes": 6974,
+      "bytes": 6959,
       "path": "Install-Plugin.ps1",
-      "sha256": "434a1c6931ca10d186361685c17a8aad9649728094aa879171afe2758cb67e12"
+      "sha256": "ada9bcc541e20a38ae8254d8a0293d7f36c82582a5b6e7ea67a5387ea667a08b"
     },
     {
       "bytes": 1096,
@@ -146,14 +146,14 @@
       "sha256": "ff57de63e119d709de9593ad045b03759ec0a0e7402961380dedaf289ac85fa7"
     },
     {
-      "bytes": 9986,
+      "bytes": 12058,
       "path": "scripts/one-click.mjs",
-      "sha256": "3c16e7515a05a96f61719805a17cfccad4aea548f0ec4438892f2e7ab414ebe5"
+      "sha256": "8b00cb6b28001b68678ed8d30afbfcad313953f5332b70ad8a2c45b915c5ff97"
     },
     {
-      "bytes": 5261,
+      "bytes": 7483,
       "path": "scripts/setup.mjs",
-      "sha256": "1ccf8e18872ac70f556cf701eb71ae9a3ff4b0013212d06af1dd34c9a53f9297"
+      "sha256": "2c5cda604ae8b9ae6fb7f07b5fc16d4e947a4b4e2273745427f9291fa38ae57d"
     },
     {
       "bytes": 1127,
@@ -172,7 +172,7 @@
     }
   ],
   "name": "codex-mobile",
-  "releaseNotes": "V1.3.1 · 软件包内置插件一键安装\n\n- Windows 11、Windows 10、macOS 软件与插件统一为 1.3.1。\n- 完整软件包已经包含插件和安装工具，不用另外下载插件。Windows 根目录新增 Install-Plugin.cmd；macOS 根目录新增 Install-Plugin.command。\n- 双击后直接绑定所在软件目录，使用包内 Node.js 完成插件注册，无需 npm、手动输入命令或添加插件市场。\n- 安装时不必提前打开 Codex，但必须已经安装 Codex。工具不模拟鼠标键盘、不操作其他窗口、不打开浏览器或登录窗口，也不会强制重启 Codex。\n- 保留软件网页、蓝白插件界面、原图标、当前页批准设备、手机权限和更新功能。\n\n插件使用教学\n\n1. 下载与你系统对应的 1.3.1 完整软件 ZIP，完整解压到可写目录。不要在压缩包内直接运行，也不要下载 Source code 代替软件包。\n2. Windows 双击软件文件夹根目录 Install-Plugin.cmd；macOS 双击同目录 Install-Plugin.command。无需先启动软件或打开 Codex。\n3. 安装完成后自行打开 Codex，进入“插件 → Codex 移动助手”，点“打开插件”。Codex 已经运行时可关闭再启用本插件，必要时自行重开 Codex。\n4. 确认电脑端 Codex 已登录，在插件中生成二维码。手机扫码后直接在当前插件页面点“批准连接”。设置入口可直接调整手机权限，也可以在对话中说“打开移动助手管理面板”。\n5. “更新”中分别管理软件与插件的检查更新、一键更新及自动更新。自动更新默认关闭；插件安装后需要宿主重新加载时会显示待生效。\n\n仍可使用 Codex-Mobile.exe（Windows）或 Start.command（macOS）启动独立软件。\n从旧版在线更新的用户可运行 tools/Install-Plugin.cmd（Windows）或 tools/Install-Plugin.command（macOS）；完整 ZIP 的根目录也提供入口。\n详细教学与故障处理见 docs/V1.3.1-PLUGIN-INSTALL.md。",
+  "releaseNotes": "V1.3.1 · 软件包内置插件一键安装\n\n- Windows 11、Windows 10、macOS 软件与插件统一为 1.3.1。\n- 完整软件包已经包含插件和安装工具，不用另外下载插件。Windows 根目录新增 Install-Plugin.cmd；macOS 根目录新增 Install-Plugin.command。\n- 双击后直接绑定所在软件目录，使用包内 Node.js 完成插件注册，无需 npm、手动输入命令或添加插件市场。\n- 安装时不必提前打开 Codex，但必须已经安装 Codex。工具不模拟鼠标键盘、不操作其他窗口、不打开浏览器或登录窗口，也不会强制重启 Codex。\n- 保留软件网页、蓝白插件界面、原图标、当前页批准设备、手机权限和更新功能。\n\n插件使用教学\n\n1. 下载与你系统对应的 1.3.1 完整软件 ZIP，完整解压到可写目录。不要在压缩包内直接运行，也不要下载 Source code 代替软件包。\n2. Windows 双击软件文件夹根目录 Install-Plugin.cmd；macOS 双击同目录 Install-Plugin.command。无需先启动软件或打开 Codex。\n3. 安装完成后自行打开 Codex，进入“插件 → Codex 移动助手”，点“打开插件”。Codex 已经运行时可关闭再启用本插件，必要时自行重开 Codex。\n4. 确认电脑端 Codex 已登录，在插件中生成二维码。手机扫码后直接在当前插件页面点“批准连接”。设置入口可直接调整手机权限，也可以在对话中说“打开移动助手管理面板”。\n5. “更新”中分别管理软件与插件的检查更新、一键更新及自动更新。自动更新默认关闭；插件安装后需要宿主重新加载时会显示待生效。\n\n仍可使用 Codex-Mobile.exe（Windows）或 Start.command（macOS）启动独立软件。\n从旧版在线更新的用户可运行 tools/Install-Plugin.cmd（Windows）或 tools/Install-Plugin.command（macOS）；完整 ZIP 的根目录也提供入口。\n详细教学与故障处理见 docs/V1.3.1-PLUGIN-INSTALL.md。\n\n安装修正\n\n- 在线升级后首次启动会补齐根目录安装入口，已有文件保持原样。\n- 修复卸载插件后旧插件源仍存在时的一键安装失败：识别并复用本插件原有有效配置，避免同名插件源冲突。\n- 安装失败日志增加阶段、退出码和经过处理的错误详情，便于定位原因。\n- 产品版本仍为 1.3.1；此前已经升级到同版本的用户不会再次收到自动安装，请使用修复后的完整软件包。",
   "schema": 1,
   "version": "1.3.1"
 }

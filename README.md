@@ -14,7 +14,7 @@
 
 ## 下载与首次使用
 
-请从 [V1.3.1 完整软件发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-full) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
+请从 [V1.3.1 完整软件发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-rebuild.1) 下载与你电脑匹配的完整 ZIP。三个平台分别从 **V1.0 / 1.0.0** 开始，今后独立升级。
 
 当前三版均为 **1.3.1**，在已发布 1.2 的基础上开发，保留加载优化、新图标和既有功能。GPT 复用桌面登录，不添加第二次账号登录。重点验证从 1.2 自动升级到后续版本；更早版本更新失败时见 [升级说明](docs/V1.2.0-UPGRADE.md)。
 

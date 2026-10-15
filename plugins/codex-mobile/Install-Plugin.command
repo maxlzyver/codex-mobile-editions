@@ -81,7 +81,7 @@ elif [[ "$automatic" == true ]]; then
 fi
 node="$bootstrap/runtime/darwin-$arch/bin/node"
 if [[ "$automatic" == true ]]; then
-  args=("$plugin_root/scripts/one-click.mjs" --data-dir "$result_dir" --documents-dir "$HOME/Documents")
+  args=("$plugin_root/scripts/one-click.mjs" --documents-dir "$HOME/Documents")
   for directory in "${roots[@]}"; do args+=(--search-root "$directory"); done
   exec "$node" "${args[@]}" "$@"
 else

@@ -25,7 +25,7 @@
 
 ## 本版适用范围
 
-当前版本为 **V1.3.1**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-full)。
+当前版本为 **V1.3.1**，保留此前全部功能；重点验证 1.2 的后续自动升级，更早版本无法更新时见 [升级说明](docs/V1.2.0-UPGRADE.md)。[新版下载](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1-rebuild.1)。
 
 - 仅适用于 **Windows 11、系统内部版本 22000 或更新、原生 AMD64/x64**。拒绝 ARM64（包括 x64 模拟运行）和 32 位系统，也不会安装其他平台专用版。
 - 完整包为 **`codex-mobile-windows11-1.3.1-x64.zip`**，内置 Windows x64 Node.js 24 和 cloudflared；Codex 程序及账户不包含在内，需在目标电脑自行安装并登录兼容版本。

@@ -64,7 +64,7 @@ try {
   $setupArguments = @((Join-Path $PSScriptRoot $entry))
   if ($InstallationRoot) { $setupArguments += @('--installation-root', $InstallationRoot) }
   if ($DefaultCwd) { $setupArguments += @('--default-cwd', [IO.Path]::GetFullPath($DefaultCwd)) }
-  if ($DataDir -or $automatic) { $setupArguments += @('--data-dir', $resultDir) }
+  if ($DataDir) { $setupArguments += @('--data-dir', $resultDir) }
   if ($automatic) {
     $documents = [Environment]::GetFolderPath('MyDocuments'); if (-not $documents) { $documents = Join-Path $env:USERPROFILE 'Documents' }
     $setupArguments += @('--documents-dir', $documents)
