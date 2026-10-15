@@ -1,5 +1,5 @@
 import { App, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
-const app = new App({ name: 'Codex 移动助手', version: '1.3.0' }, {}, { autoResize: true });
+const app = new App({ name: 'Codex 移动助手', version: '1.3.1' }, {}, { autoResize: true });
 const $ = id => document.getElementById(id);
 let state = {}, activeTab = 'connect', inFlight = false, connected = false, pairing = null;
 const recentlyApproved = new Set();
@@ -38,7 +38,7 @@ function renderDevices(devices) {
 function render(next, { initial = false } = {}) {
   if (!next) return; state = next;
   const backend = state.backend, permissions = backend?.permissions || {};
-  text('version', `插件 ${state.pluginVersion || '1.3.0'}`);
+  text('version', `插件 ${state.pluginVersion || '1.3.1'}`);
   text('service-status', backend ? `后台 ${backend.app?.version || backend.status?.version || ''} · ${statusNames[backend.status?.codex] || backend.status?.codex || '就绪'}` : state.configured ? '后台尚未连接' : '需要首次安装绑定');
   text('connection-error', state.error || backend?.status?.error || '');
   $('start').disabled = inFlight || !state.configured;
@@ -54,7 +54,7 @@ function render(next, { initial = false } = {}) {
   text('permission-manager-note', backend ? '权限与软件版共用，保存后立即生效。仅开启你需要的权限。' : '连接后台后，可以在这里管理手机权限。');
   renderDevices(backend?.devices || []);
   renderUpdate('plugin', state.pluginUpdate, true); renderUpdate('backend', backend?.updates, false);
-  text('about-versions', `插件运行版本：${state.pluginVersion || '1.3.0'}；后台版本：${backend?.app?.version || backend?.status?.version || '未连接'}`);
+  text('about-versions', `插件运行版本：${state.pluginVersion || '1.3.1'}；后台版本：${backend?.app?.version || backend?.status?.version || '未连接'}`);
   text('busy-state', backend?.busy ? '当前有任务执行或状态尚未确认，更新会等待。' : '当前后台空闲。');
   if (initial && state.focus) showTab(state.focus);
 }

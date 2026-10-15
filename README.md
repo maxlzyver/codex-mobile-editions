@@ -1,4 +1,4 @@
-# Codex 移动助手 · V1.3.0 专用版
+# Codex 移动助手 · 软件 V1.3.0 / 插件 V1.3.1
 
 作者：[maxlzyver](https://github.com/maxlzyver) · [反馈邮件](mailto:lzyuan666666@gmail.com) · MIT 许可证
 
@@ -29,6 +29,10 @@
 程序内置 Node.js 与 cloudflared，不包含 Codex 本身或任何人的账户。Windows ARM64、32 位系统不在本次发布范围。Windows 10 专用启动器不会让不兼容的官方 Codex 版本变得兼容。
 
 旧通用版 **1.2 不会自动迁移到本仓库的专用版**。首次换装请退出旧助手，将新完整包解压到新文件夹，重新选择项目并配对手机。电脑项目和 Codex 聊天仍在原位置。
+
+## V1.3.1 插件安装更新
+
+新增双击一键安装工具：解压 [1.3.1 插件包](https://github.com/maxlzyver/codex-mobile-editions/releases/tag/v1.3.1)，放在现有完整软件文件夹旁，Windows 双击 `Install-Plugin.cmd`，macOS 双击 `Install-Plugin.command`。自动定位软件与 Codex 并注册，不模拟鼠标键盘，不操作 Codex 窗口。安装时不必提前打开 Codex；完成后自行打开 Codex 使用插件。软件版继续使用 1.3.0，首次连接手机前需登录 Codex。详见 [1.3.1 一键安装教学](docs/V1.3.1-PLUGIN-INSTALL.md)。
 
 ## V1.3.0 更新
 

@@ -1,9 +1,12 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-mobile",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "在 Codex 内管理移动助手、手机配对、设备权限与软件及插件更新。",
-  "author": { "name": "maxlzyver", "email": "lzyuan666666@gmail.com" },
+  "author": {
+    "name": "maxlzyver",
+    "email": "lzyuan666666@gmail.com"
+  },
   "repository": "https://github.com/maxlzyver/codex-mobile-editions",
   "license": "MIT"
 }

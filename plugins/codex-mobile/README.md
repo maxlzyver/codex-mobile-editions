@@ -1,8 +1,20 @@
-# Codex 移动助手插件 · 1.3.0
+# Codex 移动助手插件 · 1.3.1
 
 在 Codex 内管理手机连接、二维码、设备、手机权限、使用说明、插件更新和关于。软件版与插件版使用同一个本地后台；手机继续使用浏览器。插件不会打开助手的独立管理网页。
 
-## 首次安装
+## 一键安装（1.3.1）
+
+先安装 Codex，并完整解压现有 Editions 1.3.0 软件包。再解压本插件 ZIP，把两个文件夹放在同一目录：Windows 双击 `Install-Plugin.cmd`，macOS 双击 `Install-Plugin.command`。工具自动查找软件、复用其运行组件并注册插件，不需要输入命令、安装 npm 或手工添加插件市场。
+
+**安装时不必提前打开 Codex。** 工具不模拟鼠标键盘、不切换或操作 Codex 窗口，不打开网页、登录窗口或启动助手服务。双击入口的终端窗口仅显示安装进度；安装完成后自行打开 Codex，在插件详情点“打开插件”。首次手机连接前，电脑端须已登录 Codex。
+
+找不到软件时，把插件文件夹放到完整软件文件夹旁再运行；Windows 也可把软件文件夹拖到 `Install-Plugin.cmd` 上。发现多个安装时会停止并提示指定目录，不会擅自覆盖其他安装。已配置的项目目录会沿用；首次使用且没有项目配置时，创建 `Documents/Codex-Mobile-Workspace` 作为默认项目目录。
+
+本次 1.3.1 仅更新插件与安装工具，继续复用 1.3.0 软件，原配对、权限、网页和蓝白插件界面保留。Codex 已开着时，可关闭再启用本插件让宿主重新发现它；工具不会自动重启 Codex。
+
+安装结果保存为插件数据目录下的 `install-result.txt`（默认 Windows `%LOCALAPPDATA%\CodexMobile\plugin`；macOS `~/Library/Application Support/CodexMobile/plugin`）。复用自定义绑定时沿用原数据目录。
+
+## 手动安装（保留原接口）
 
 先完整解压与你系统对应的 Editions 1.3.0 软件包，并安装、登录 Codex。插件包不包含另一份 Node.js 或 Codex：安装工具和插件均使用软件包自带的 Node.js 24。
 
@@ -27,7 +39,7 @@ codex plugin marketplace add "输出的 marketplaceRoot"
 codex plugin add codex-mobile@codex-mobile-local --json
 ```
 
-Windows 可执行 `Install-Plugin.ps1 -InstallationRoot 'D:\Apps\Codex-Mobile'` 只绑定；macOS 省略 `--register` 只绑定。开发验收可用 `-DataDir PATH` 或 `--data-dir PATH` 指定隔离的插件数据目录。插件源存放在稳定的用户目录，Codex 将其安装副本放入缓存，用户配置不会保存在缓存内。
+Windows 可执行 `Install-Plugin.ps1 -InstallationRoot 'D:\Apps\Codex-Mobile'` 只绑定；macOS 显式给出软件路径且省略 `--register` 时只绑定。开发验收可用 `-DataDir PATH` 或 `--data-dir PATH` 指定隔离的插件数据目录。插件源存放在稳定的用户目录，Codex 将其安装副本放入缓存，用户配置不会保存在缓存内。
 
 ## 在 Codex 中使用
 

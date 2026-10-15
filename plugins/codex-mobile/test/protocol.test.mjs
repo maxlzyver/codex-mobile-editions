@@ -20,7 +20,7 @@ test('installed bundle negotiates MCP, exposes native entrypoints/settings and r
   OpenAISettingsCapabilitySchema.parse(client.getServerCapabilities().extensions['openai/settings']);
   for (const name of ['mobile_pairing', 'mobile_permissions', 'mobile_plugin_update', 'mobile_device_change']) assert.deepEqual(tools.find(tool => tool.name === name)._meta.ui.visibility, ['app']);
   const status = await client.callTool({ name: 'mobile_status', arguments: {} });
-  assert.equal(status.structuredContent.configured, false); assert.equal(status.structuredContent.pluginVersion, '1.3.0');
+  assert.equal(status.structuredContent.configured, false); assert.equal(status.structuredContent.pluginVersion, '1.3.1');
   const html = (await client.readResource({ uri: panel._meta.ui.resourceUri })).contents[0];
   assert.equal(html.mimeType, 'text/html;profile=mcp-app');
   assert.equal((html.text.match(/<h1>/g) || []).length, 1);
@@ -52,6 +52,6 @@ test('a running MCP releases its Windows cache cwd and serves the loaded UI afte
   const before = await client.readResource({ uri: panel._meta.ui.resourceUri });
   await rename(cache, replaced);
   const after = await client.readResource({ uri: panel._meta.ui.resourceUri }); assert.deepEqual(after, before);
-  assert.equal((await client.callTool({ name: 'mobile_status', arguments: {} })).structuredContent.pluginVersion, '1.3.0');
+  assert.equal((await client.callTool({ name: 'mobile_status', arguments: {} })).structuredContent.pluginVersion, '1.3.1');
   assert.equal(errors, '');
 });

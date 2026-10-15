@@ -1,11 +1,15 @@
 {
   "name": "codex-mobile",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "在 Codex 内管理移动助手、手机配对、设备权限与软件及插件更新。",
   "skills": "./skills/",
   "mcpServers": "./mcp.json",
   "requires_local_executor": true,
-  "extensions": { "com.openai": { "onboardingSkill": "./skills/setup/SKILL.md" } },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md"
+    }
+  },
   "interface": {
     "displayName": "Codex 移动助手",
     "shortDescription": "手机连接与权限管理，直接在 Codex 内完成",
@@ -14,6 +18,9 @@
     "brandColor": "#3565E8",
     "composerIcon": "./assets/app-icon.png",
     "logo": "./assets/app-icon.png",
-    "defaultPrompt": ["打开移动助手管理面板", "检查手机连接状态"]
+    "defaultPrompt": [
+      "打开移动助手管理面板",
+      "检查手机连接状态"
+    ]
   }
 }

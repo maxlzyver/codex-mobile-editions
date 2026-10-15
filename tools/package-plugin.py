@@ -83,7 +83,10 @@ def plan():
     require(json.loads(entries['.codex-plugin/plugin.json'])['version'] == version, 'Plugin compatibility version mismatch')
     mcp = json.loads(entries['mcp.json'])
     require(mcp['mcpServers']['mobile']['command'] == '__CODEX_MOBILE_BUNDLED_NODE__', 'Do not publish a materialized local MCP command')
-    notes = (ROOT / 'editions/windows11/docs/UPDATE-NOTES.md').read_text(encoding='utf-8').strip()
+    notes_file = ROOT / f'docs/V{version}-UPDATE-NOTES.md'
+    if not notes_file.is_file():
+        notes_file = ROOT / 'editions/windows11/docs/UPDATE-NOTES.md'
+    notes = notes_file.read_text(encoding='utf-8').strip()
     manifest = {'schema': 1, 'name': 'codex-mobile', 'version': version, 'releaseNotes': notes,
                 'files': [{'path': name, 'bytes': len(data), 'sha256': digest(data)} for name, data in sorted(entries.items())]}
     return version, entries, manifest
@@ -110,6 +113,10 @@ def main():
         checksums = output / f'SHA256SUMS-plugin-{version}.txt'
         require(args.replace or not (destination.exists() or checksums.exists()), 'Plugin release files already exist; choose a new version or --replace')
         payloads = {**entries, 'update.json': manifest_bytes}
+        # The convenient ZIP-root entry is an alias of the updater-compatible
+        # scripts/ entry. V1.3.0's updater rejects new root program filenames.
+        if 'scripts/Install-Plugin.cmd' in entries:
+            payloads['Install-Plugin.cmd'] = entries['scripts/Install-Plugin.cmd']
         with tempfile.NamedTemporaryFile(dir=output, prefix='.plugin-', suffix='.tmp', delete=False) as handle:
             temporary = Path(handle.name)
         try:
