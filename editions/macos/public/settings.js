@@ -243,7 +243,7 @@
     $('release-notice-title').textContent = !previous && !manual ? '欢迎使用 · 本版更新' : 'V' + currentVersion + ' 更新公告';
     $('release-notice-intro').textContent = !previous && !manual
       ? '连接后即可查看聊天、发送指令和访问已授权项目。先了解这一版的新功能与默认权限，再按自己的需要开启。'
-      : '本版改进了手机聊天、文件访问和设置体验。升级不会替你开启手机权限，请在电脑端按需设置。';
+      : '本版给手机聊天留出了更多空间，并增加了返回入口。';
     if (!$('release-notice').open) $('release-notice').showModal();
     noticeShown = currentVersion;
     try { localStorage.setItem(noticeKey, currentVersion); } catch {}

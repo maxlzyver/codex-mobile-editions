@@ -139,7 +139,9 @@ try {
     assert.equal(await external.count(), 1); assert.equal(await external.getAttribute('href'), 'https://example.com/docs?lang=zh'); assert.equal(await external.getAttribute('rel'), 'noopener noreferrer');
     assert.equal(await page.locator('#messages img, #messages script').count(), 0);
     assert.equal(await page.evaluate(() => Boolean(window.__messageExecuted)), false);
+    await page.locator('#composer-options-toggle').tap();
     const bounds = await layout(page);
+    await page.locator('#composer-options-toggle').tap();
     await page.getByRole('button', { name: '查看报告', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(output, id + '-' + width + '-chat-files.png'), fullPage: true });
 

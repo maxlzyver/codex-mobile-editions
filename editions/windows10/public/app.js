@@ -18,6 +18,8 @@
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-5 5-5 13 0 18m0-18c5 5 5 13 0 18"/>',
     qr: '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h3v3h3m-6 3v-3m6-6v3M12 3v3m0 6h3M3 12h3m6 6v3m6-9h3"/>',
     copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3"/>',
+    bookmark: '<path d="M6 4h12v16l-6-4-6 4V4Z"/>',
+    sliders: '<path d="M4 7h5m4 0h7M4 17h9m4 0h3M9 4v6m8 4v6"/>',
     chat: '<path d="M21 11a9 9 0 0 1-9 9H4l-2 2 1-7a9 9 0 1 1 18-4Z"/><path d="M8 10h8m-8 4h5"/>',
     terminal: '<path d="m5 6 6 6-6 6m9 0h5"/>',
   };
@@ -44,6 +46,25 @@
     models: [], projects: [], projectId: '', filesProjectId: '', filePath: '', filesGeneration: 0, projectsGeneration: 0, accessRevision: 0, selectionThread: null, view: 'chat', modelsBusy: false,
   };
   const sidebarStorageKey = `codex-mobile.${document.documentElement.dataset.edition || 'web'}.sidebar-disclosures.v1`;
+  const conversationStorageKey = `codex-mobile.${document.documentElement.dataset.edition || 'web'}.last-conversation`;
+  function savedConversation() {
+    const sessionId = state.bootstrap?.session?.id;
+    if (state.role !== 'controller' || !sessionId) return null;
+    try {
+      const saved = JSON.parse(localStorage.getItem(conversationStorageKey) || 'null');
+      if (saved?.sessionId === sessionId && ['codex', 'gpt'].includes(saved.mode)
+        && (saved.threadId === null || typeof saved.threadId === 'string' && /^[a-zA-Z0-9_-]{1,512}$/.test(saved.threadId))) return saved;
+    } catch { /* Resuming from browser storage is optional. */ }
+    return null;
+  }
+  function rememberConversation() {
+    const sessionId = state.bootstrap?.session?.id;
+    if (state.role !== 'controller' || !sessionId) return;
+    try { localStorage.setItem(conversationStorageKey, JSON.stringify({ sessionId, mode: state.mode, threadId: state.activeId })); } catch {}
+  }
+  function forgetConversation() {
+    try { localStorage.removeItem(conversationStorageKey); } catch {}
+  }
   try {
     const saved = JSON.parse(localStorage.getItem(sidebarStorageKey) || '[]');
     if (Array.isArray(saved)) for (const entry of saved.slice(-600)) {
@@ -162,7 +183,9 @@
     const connected = state.connected && status.codex !== 'error';
     hidden('reconnect', state.role !== 'owner' || status.codex !== 'error');
     $('connection-status').classList.toggle('offline', !connected);
-    $('connection-status').lastElementChild.textContent = state.connected ? (status.codex === 'connected' ? '电脑已连接' : status.codex === 'error' ? 'Codex 未就绪' : state.role === 'pending' ? '等待确认' : '正在连接') : '连接中断 · 重试中';
+    const connectionLabel = state.connected ? (status.codex === 'connected' ? '电脑已连接' : status.codex === 'error' ? 'Codex 未就绪' : state.role === 'pending' ? '等待确认' : '正在连接') : '连接中断 · 重试中';
+    $('connection-status').lastElementChild.textContent = connectionLabel;
+    $('connection-status').title = connectionLabel;
     $('computer-name').textContent = status.hostname || '我的电脑';
     $('codex-state').textContent = info.desktop?.connected ? '已接入桌面 Codex' : status.codex === 'connected' ? (status.mode === 'shared' ? '已接入共享 Codex' : 'Codex 本地任务已就绪') : status.error || '正在连接 Codex';
     const standalone = status.mode === 'standalone';
@@ -198,7 +221,11 @@
       state.bootstrap = data;
       state.role = data.role || 'anonymous';
       state.csrf = data.csrfToken || '';
-      if (previousSession !== state.role + ':' + state.csrf && previousRole !== 'loading') clearConversationCache();
+      if (previousSession !== state.role + ':' + state.csrf && previousRole !== 'loading') {
+        clearConversationCache();
+        if (['owner', 'controller'].includes(state.role)) resetConversation();
+      }
+      if (state.role === 'anonymous') forgetConversation();
       const accessChanged = previousAccess !== fileAccessKey(state.role, data.permissions);
       if (accessChanged) invalidateFileAccess();
       document.dispatchEvent(new CustomEvent('codex:bootstrap', { detail: data }));
@@ -210,9 +237,13 @@
         hidden('workspace', false);
         if (!state.shownReady || previousRole !== state.role) {
           state.shownReady = true;
+          const saved = savedConversation();
+          setChatMode(saved?.mode === 'gpt' && data.features?.nativeGpt ? 'gpt' : 'codex');
+          const generation = state.conversationGeneration;
           await loadThreads();
           await Promise.allSettled([loadProjects(), loadModels(), loadDesktopProjects()]);
-          if (previousRole === 'pending') toast('电脑已确认，现在可以开始工作了');
+          if (generation === state.conversationGeneration && saved?.mode === state.mode && saved.threadId) await openThread(saved.threadId, { remember: false });
+          if (previousRole === 'pending') toast('电脑已确认。可在任务列表中保存返回入口');
         } else if (accessChanged) await reloadFileAccess();
       } else if (state.role === 'pending') {
         showAuth('请在电脑上确认连接', '你的设备正在等待确认。请在电脑的「连接手机」窗口中批准本次连接。', true, '确认后会自动进入你的工作空间。');
@@ -221,6 +252,7 @@
         hidden('pair-form', false);
       } else {
         if ($('preview-dialog').open) $('preview-dialog').close();
+        if ($('return-entry-dialog').open) $('return-entry-dialog').close();
         $('preview-content').replaceChildren();
         showAuth(previousRole === 'controller' ? '此设备已断开连接' : '把 Codex 带到手机上', '请在电脑上打开「连接手机」，用手机相机扫描二维码，然后在浏览器中打开链接。', false, '配对链接有时效；已过期时请在电脑重新生成。');
       }
@@ -243,8 +275,9 @@
   function snapshotKey(id) { return state.mode + ':' + id; }
   function refreshComposerControls() {
     const authorized = ['owner', 'controller'].includes(state.role), gpt = state.mode === 'gpt';
+    const loadingThread = Boolean(state.activeId && !state.thread);
     hidden('chat-mode-bar', !authorized || !state.bootstrap?.features?.nativeGpt);
-    $('attach-files').disabled = !authorized || state.sending || state.activeReadOnly || !state.bootstrap?.features?.attachments || gpt;
+    $('attach-files').disabled = !authorized || state.sending || loadingThread || state.activeReadOnly || !state.bootstrap?.features?.attachments || gpt;
     $('attach-files').title = gpt ? '当前桌面 GPT 接口不支持附件发送' : !state.bootstrap?.features?.attachments ? '需要电脑端支持附件上传' : '添加照片或文件';
     const running = isRunning(state.thread);
     hidden('composer-activity', !running);
@@ -262,7 +295,8 @@
       $('send').disabled = !state.activeId || state.sending || state.activeReadOnly;
       if (running) { $('send').disabled = true; $('composer-hint').textContent = 'GPT 正在回复，当前桌面接口暂不支持中途引导或停止，请等待回复完成。'; }
     }
-    if (state.pendingCreation) { $('prompt').disabled = true; $('send').disabled = true; $('composer-hint').textContent = '聊天正在桌面创建。完成后从该项目列表打开；请勿重复发送。'; }
+    if (loadingThread || state.pendingCreation) { $('prompt').disabled = true; $('send').disabled = true; }
+    if (state.pendingCreation) $('composer-hint').textContent = '聊天正在桌面创建。完成后从该项目列表打开；请勿重复发送。';
   }
   function scheduleThreadPoll() {
     clearTimeout(state.threadPollTimer);
@@ -341,7 +375,7 @@
       if (state.mode === 'codex') {
         const create = node('button', 'project-new-chat', '＋ 新建子聊天'); create.type = 'button'; create.disabled = project.capabilities?.createThread !== true;
         create.title = create.disabled ? '此桌面项目暂不支持手机新建聊天' : '在这个桌面项目内新建聊天';
-        create.addEventListener('click', () => { resetConversation(); state.nativeProjectId = project.id; $('thread-title').textContent = project.name + ' · 新聊天'; $('thread-cwd').textContent = project.cwd || '沿用桌面项目'; $('project-select').disabled = true; $('prompt').placeholder = '描述新聊天要完成的任务…'; $('prompt').focus(); }); body.append(create);
+        create.addEventListener('click', () => { startNewConversation(); state.nativeProjectId = project.id; $('thread-title').textContent = project.name + ' · 新聊天'; $('thread-cwd').textContent = project.cwd || '沿用桌面项目'; $('project-select').disabled = true; $('prompt').placeholder = '描述新聊天要完成的任务…'; $('prompt').focus(); }); body.append(create);
       }
       for (const thread of children) { used.add(thread.id); body.append(threadButton(thread)); }
       if (!children.length) body.append(node('p', 'list-empty', '暂未读取到聊天，可在电脑打开后刷新'));
@@ -378,20 +412,40 @@
       hidden('desktop-project-note', !$('desktop-project-note').textContent); renderThreads();
     } catch (error) { if (current()) { $('desktop-project-note').textContent = error.message; hidden('desktop-project-note', false); } }
   }
-  async function changeChatMode(mode) {
-    if (state.mode === mode || !['owner', 'controller'].includes(state.role)) return;
-    resetConversation(); state.mode = mode; state.nativeProjectId = ''; state.threads = []; state.lastThreads = ''; state.listBusy = null;
+  function setChatMode(mode) {
+    if (state.mode === mode) return false;
+    state.mode = mode; state.threads = []; state.lastThreads = ''; state.listBusy = null;
     document.body.dataset.chatMode = mode;
     $('chat-mode-codex').setAttribute('aria-pressed', String(mode === 'codex')); $('chat-mode-gpt').setAttribute('aria-pressed', String(mode === 'gpt'));
     $('chat-mode-note').textContent = mode === 'gpt' ? '继续电脑上已有的 GPT 聊天' : '项目工作与代码任务';
     $('new-thread').disabled = mode === 'gpt'; $('mobile-new').disabled = mode === 'gpt';
     $('new-thread').title = mode === 'gpt' ? '当前桌面接口不支持新建 GPT 聊天，请在电脑创建后刷新' : '新建助手任务';
-    $('thread-title').textContent = mode === 'gpt' ? '选择一个电脑 GPT 聊天' : '新的开始';
-    hidden('welcome', mode === 'gpt');
-    if (mode === 'gpt') $('messages').append(node('p', 'list-empty', '从左侧选择电脑上已有的 GPT 聊天。无需重复登录；新建聊天及不支持的操作仍在电脑完成。'));
-    refreshComposerControls(); await loadThreads(); if (mode === 'codex') await loadModels();
+    resetConversation();
+    return true;
   }
-  function closeSidebar() { $('workspace').classList.remove('sidebar-open'); }
+  async function changeChatMode(mode) {
+    if (!['owner', 'controller'].includes(state.role) || !setChatMode(mode)) return;
+    rememberConversation();
+    await loadThreads();
+    if (mode === 'codex') await loadModels();
+  }
+  function toggleSidebar(open) {
+    $('workspace').classList.toggle('sidebar-open', open);
+    for (const id of ['sidebar-open', 'files-sidebar']) $(id).setAttribute('aria-expanded', String(open));
+    $('sidebar').inert = mobileLayout.matches && !open;
+    if (open) $('sidebar-close').focus({ preventScroll: true });
+  }
+  function closeSidebar(restoreFocus = false) {
+    toggleSidebar(false);
+    if (restoreFocus && mobileLayout.matches) $(state.view === 'files' ? 'files-sidebar' : 'sidebar-open').focus({ preventScroll: true });
+  }
+  function toggleComposerOptions(open) {
+    $('composer-options-toggle').setAttribute('aria-expanded', String(open));
+  }
+  function startNewConversation() {
+    resetConversation();
+    rememberConversation();
+  }
   function resetConversation() {
     clearAttachmentDrafts(); state.nativeProjectId = ''; state.pendingCreation = false; state.gptPage = null; state.gptHistory = []; hidden('load-gpt-history', true);
     stopConversationReads();
@@ -415,14 +469,17 @@
     updateProjectContext();
     $('messages').replaceChildren();
     $('approvals').replaceChildren();
-    $('thread-title').textContent = '新的开始';
-    hidden('welcome', false);
+    const gpt = state.mode === 'gpt';
+    $('thread-title').textContent = gpt ? '选择一个电脑 GPT 聊天' : '新的开始';
+    hidden('welcome', gpt);
+    if (gpt) $('messages').append(node('p', 'list-empty', '从任务列表选择电脑上已有的 GPT 聊天。'));
     hidden('thread-state', true);
     hidden('stop-turn', true);
     hidden('error-banner', true);
-    $('prompt').disabled = false;
+    $('prompt').disabled = gpt;
     $('prompt').placeholder = '描述你想做的事…';
-    $('send').disabled = state.sending;
+    $('send').disabled = state.sending || gpt;
+    toggleComposerOptions(false);
     renderThreads();
     closeSidebar();
   }
@@ -485,11 +542,13 @@
     if (remaining > 0) for (const message of messages.filter(process).slice(-remaining)) selected.add(message);
     return messages.filter(message => selected.has(message));
   }
-  async function openThread(id) {
+  async function openThread(id, { remember = true } = {}) {
     if (!id || !['owner', 'controller'].includes(state.role)) return;
     resetConversation();
     state.activeId = id;
+    if (remember) rememberConversation();
     hidden('welcome', true);
+    $('messages').replaceChildren();
     const cached = state.snapshots.get(snapshotKey(id));
     if (cached) {
       state.snapshots.delete(snapshotKey(id)); state.snapshots.set(snapshotKey(id), cached);
@@ -498,6 +557,7 @@
       applyThreadView({ ...cached.data, approvals: [] }, true);
       $('thread-state').textContent = '已保存记录 · 正在同步'; hidden('thread-state', false);
     } else $('messages').append(node('p', 'list-empty', '正在读取近期消息…'));
+    refreshComposerControls();
     renderThreads();
     await loadThread(true);
   }
@@ -516,6 +576,7 @@
       const data = await api(threadApi(id) + `?stage=recent${since}`, { signal: request.controller.signal });
       if (!readStillCurrent(request)) return;
       if (data.unchanged) { if (state.progressive) scheduleDetails(); return; }
+      if (!state.thread) hidden('error-banner', true);
       const incoming = data.thread || data;
       if (state.mode === 'gpt' && data.page && !state.gptHistory.length) state.gptPage = data.page;
       const recent = incoming.loadingStage === 'recent';
@@ -535,8 +596,15 @@
       if (recent) scheduleDetails();
     } catch (error) {
       if (!readStillCurrent(request) || error.name === 'AbortError') return;
+      if (error.status === 404 && !state.thread) {
+        const saved = savedConversation();
+        resetConversation();
+        if (saved?.mode === state.mode && saved.threadId === id) rememberConversation();
+        toast(error.message);
+        return;
+      }
       if (forceScroll || (error.status !== 401 && error.status !== 403)) showError(error);
-      if (error.status === 401 || error.status === 403) { clearConversationCache(); await bootstrap(); }
+      if (error.status === 401 || error.status === 403) { forgetConversation(); clearConversationCache(); await bootstrap(); }
     } finally { if (state.readBusy === request) state.readBusy = false; scheduleThreadPoll(); }
   }
   function scheduleDetails(immediate = false) {
@@ -1138,7 +1206,8 @@
     event.preventDefault();
     const originalInput = $('prompt').value;
     const prompt = originalInput.trim();
-    if ((!prompt && !state.attachmentDrafts.length) || state.sending || state.activeReadOnly || state.pendingCreation || state.mode === 'gpt' && !state.activeId) return;
+    if ((!prompt && !state.attachmentDrafts.length) || state.sending || state.activeReadOnly || state.pendingCreation
+      || (state.activeId ? !state.thread : state.mode === 'gpt')) return;
     if (state.mode === 'gpt' && isRunning(state.thread)) { toast('请等待 GPT 回复完成后再发送'); return; }
     const threadId = state.activeId;
     const generation = state.conversationGeneration;
@@ -1190,6 +1259,7 @@
       if (showResponse) {
         clearAttachmentDrafts();
         state.activeId = returnedId;
+        rememberConversation();
         state.thread = mode === 'gpt' && state.gptHistory.length ? { ...data.thread, messages: mergeRecentMessages(state.gptHistory, data.thread.messages) } : data.thread;
         state.recentMessages = data.thread.messages;
         state.recentRevision = ''; state.fullRevision = ''; state.loadedDetailsRevision = '';
@@ -1498,6 +1568,10 @@
   }
   function updateInternetNote() {
     const info = state.bootstrap?.connection || {};
+    const lanUrls = info.lanUrls || [];
+    const returnUrl = state.pairMode === 'internet' ? info.publicUrl : (lanUrls.includes(state.lanUrl) ? state.lanUrl : lanUrls[0]);
+    $('pair-return-url').value = returnUrl ? new URL('/', returnUrl).href : '';
+    hidden('pair-return', !returnUrl);
     const note = $('internet-note');
     note.replaceChildren();
     hidden('internet-note', state.pairMode !== 'internet');
@@ -1629,6 +1703,20 @@
     finally { button.disabled = false; }
   }
 
+  async function copyLink(input) {
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(input.value);
+      else {
+        input.select();
+        return document.execCommand('copy');
+      }
+      return true;
+    } catch {
+      input.select();
+      return false;
+    }
+  }
+
   $('pair-open').addEventListener('click', openPairDialog);
   $('chat-mode-codex').addEventListener('click', () => changeChatMode('codex'));
   $('chat-mode-gpt').addEventListener('click', () => changeChatMode('gpt'));
@@ -1656,24 +1744,33 @@
     await createPairing();
   }));
   $('copy-pair-url').addEventListener('click', async () => {
-    const value = $('pair-url').value;
-    if (!value) return;
-    try {
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
-      else { $('pair-url').select(); if (!document.execCommand('copy')) throw new Error('copy'); }
-      toast('连接地址已复制，请仅发送给你自己的设备');
-    } catch { $('pair-url').select(); toast('请长按或按 Ctrl + C 复制连接地址'); }
+    if (!$('pair-url').value) return;
+    toast(await copyLink($('pair-url')) ? '连接地址已复制，请仅发送给你自己的设备' : '请长按或按 Ctrl + C 复制连接地址');
+  });
+  $('copy-pair-return').addEventListener('click', async () => {
+    if (!$('pair-return-url').value) return;
+    toast(await copyLink($('pair-return-url')) ? '已复制返回地址' : '请长按或按 Ctrl + C 复制返回地址');
+  });
+  $('return-entry-open').addEventListener('click', () => {
+    if (state.role !== 'controller') return;
+    $('return-entry-url').value = new URL('/', location.origin).href;
+    $('return-entry-feedback').textContent = '';
+    closeSidebar();
+    $('return-entry-dialog').showModal();
+  });
+  $('copy-return-entry').addEventListener('click', async () => {
+    $('return-entry-feedback').textContent = await copyLink($('return-entry-url')) ? '已复制返回地址' : '请长按地址复制';
   });
   $('pair-form').addEventListener('submit', submitPair);
-  $('new-thread').addEventListener('click', resetConversation);
+  $('new-thread').addEventListener('click', startNewConversation);
   $('projects-open').addEventListener('click', () => openFiles());
   $('thread-files').addEventListener('click', () => openFiles(true));
-  $('files-sidebar').addEventListener('click', () => $('workspace').classList.add('sidebar-open'));
+  $('files-sidebar').addEventListener('click', () => toggleSidebar(true));
   $('files-back-chat').addEventListener('click', () => showView('chat'));
   $('files-refresh').addEventListener('click', async () => { await loadProjects(); await browseFiles(state.filePath); });
   $('files-project').addEventListener('change', () => { state.filesProjectId = $('files-project').value; browseFiles(''); });
   $('project-select').addEventListener('change', () => { state.projectId = $('project-select').value; updateProjectContext(); });
-  $('project-task').addEventListener('click', () => { state.projectId = state.filesProjectId; $('project-select').value = state.projectId; resetConversation(); $('prompt').focus(); });
+  $('project-task').addEventListener('click', () => { state.projectId = state.filesProjectId; $('project-select').value = state.projectId; startNewConversation(); $('prompt').focus(); });
   $('model-select').addEventListener('change', () => renderEfforts());
   $('refresh-models').addEventListener('click', loadModels);
   $('fork-thread').addEventListener('click', forkThread);
@@ -1684,18 +1781,26 @@
     try { await addProjectPath($('add-project-path').value.trim()); $('add-project-path').value = ''; }
     catch (error) { $('files-error').textContent = error.message; }
   });
-  $('mobile-new').addEventListener('click', resetConversation);
+  $('mobile-new').addEventListener('click', startNewConversation);
   $('refresh-threads').addEventListener('click', async () => { await bootstrap(); state.lastThreads = ''; await loadDesktopProjects({ fresh: true }); await loadThreads(); toast('任务列表已刷新'); });
   $('load-gpt-history').addEventListener('click', loadGptHistory);
-  $('sidebar-open').addEventListener('click', () => $('workspace').classList.add('sidebar-open'));
-  $('sidebar-close').addEventListener('click', closeSidebar);
-  $('sidebar-shade').addEventListener('click', closeSidebar);
+  $('sidebar-open').addEventListener('click', () => toggleSidebar(true));
+  $('sidebar-close').addEventListener('click', () => closeSidebar(true));
+  $('sidebar-shade').addEventListener('click', () => closeSidebar(true));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && $('workspace').classList.contains('sidebar-open') && !document.querySelector('dialog[open]')) {
+      event.preventDefault();
+      closeSidebar(true);
+    }
+  });
   $('composer').addEventListener('submit', sendPrompt);
+  $('composer-options-toggle').addEventListener('click', (event) => toggleComposerOptions(event.currentTarget.getAttribute('aria-expanded') !== 'true'));
+  $('prompt').addEventListener('focus', () => toggleComposerOptions(false));
   $('prompt').addEventListener('input', resizePrompt);
   $('prompt').addEventListener('keydown', (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } });
   $('stop-turn').addEventListener('click', stopTurn);
   $('logout').addEventListener('click', async () => {
-    try { await api('/api/logout', { method: 'POST', body: {} }); clearConversationCache(); resetConversation(); await bootstrap(); }
+    try { await api('/api/logout', { method: 'POST', body: {} }); forgetConversation(); clearConversationCache(); resetConversation(); await bootstrap(); }
     catch (error) { toast(error.message); }
   });
   document.querySelectorAll('[data-prompt]').forEach((button) => button.addEventListener('click', () => { $('prompt').value = button.dataset.prompt; resizePrompt(); $('prompt').focus(); }));
@@ -1704,8 +1809,32 @@
     else { stopConversationReads(); clearTimeout(state.listPollTimer); state.listPollTimer = null; }
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) bootstrap(); refreshVisibleConversation(); });
+  window.addEventListener('pageshow', (event) => { if (event.persisted) { bootstrap(); refreshVisibleConversation(); } });
   window.addEventListener('online', () => { bootstrap(); loadThread(); });
   window.addEventListener('offline', () => { state.connected = false; updateStatus(); });
+
+  const mobileLayout = matchMedia('(max-width: 680px), (orientation: landscape) and (max-width: 1024px) and (pointer: coarse)');
+  const visualViewport = window.visualViewport;
+  function fitMobileViewport() {
+    const shell = $('app');
+    if (!mobileLayout.matches || !visualViewport) {
+      shell.style.removeProperty('--mobile-viewport-height');
+      shell.classList.remove('short-viewport');
+    } else if (Math.abs(visualViewport.scale - 1) < .01 && visualViewport.height > 0) {
+      const scroll = $('conversation-scroll');
+      const atBottom = scroll.clientHeight && scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 2;
+      shell.style.setProperty('--mobile-viewport-height', `${Math.floor(visualViewport.height)}px`);
+      shell.classList.toggle('short-viewport', visualViewport.height < 275);
+      if (atBottom) scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'instant' });
+    }
+  }
+  mobileLayout.addEventListener('change', () => {
+    toggleSidebar(mobileLayout.matches && $('workspace').classList.contains('sidebar-open'));
+    fitMobileViewport();
+  });
+  visualViewport?.addEventListener('resize', fitMobileViewport);
+  toggleSidebar(false);
+  fitMobileViewport();
 
   async function start() {
     const params = new URLSearchParams(location.hash.slice(1));

@@ -1,5 +1,5 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import path from 'node:path';
 
 export const token = () => randomBytes(32).toString('base64url');
@@ -29,7 +29,9 @@ export class Sessions {
     } catch {}
   }
   save() {
-    writeFileSync(this.file, JSON.stringify([...this.items.values()].filter(s => s.role === 'controller'), null, 2), { mode: 0o600 });
+    const temp = this.file + '.tmp';
+    writeFileSync(temp, JSON.stringify([...this.items.values()].filter(s => s.role === 'controller'), null, 2), { mode: 0o600 });
+    renameSync(temp, this.file);
   }
   create(role, name) {
     const secret = token();
@@ -51,14 +53,22 @@ export class Sessions {
     this.pairings.set(mode, pairing);
     return pairing;
   }
-  claim(value, name) {
+  claim(value, name, mobileKey = null) {
     for (const [mode, p] of this.pairings) {
       if (p.expiresAt > Date.now() && equal(p.token, value)) {
         this.pairings.delete(mode);
-        return this.create('pending', name);
+        const created = this.create('pending', name);
+        if (mobileKey) created.item.mobileKey = mobileKey;
+        return created;
       }
     }
     throw new AccessError(401, '二维码已过期或已使用，请在电脑端刷新后重新扫码。');
+  }
+  mobileDevice(id) {
+    const device = [...this.items.values()].find(item => item.id === id && item.mobileKey &&
+      ['pending', 'controller'].includes(item.role) && item.expiresAt > Date.now());
+    if (device) device.lastSeen = Date.now();
+    return device || null;
   }
   rate(key) {
     const now = Date.now();
@@ -68,14 +78,16 @@ export class Sessions {
     this.attempts.set(key, a);
   }
   devices() {
-    return [...this.items.values()].filter(s => s.role !== 'owner' && s.role !== 'revoked' && s.expiresAt > Date.now()).map(({ id, name, role, createdAt, lastSeen }) => ({ id, name, status: role === 'controller' ? 'approved' : role, createdAt, lastSeen }));
+    return [...this.items.values()].filter(s => s.role !== 'owner' && s.role !== 'revoked' && s.expiresAt > Date.now()).map(({ id, name, role, createdAt, lastSeen, mobileKey }) => ({ id, name, status: role === 'controller' ? 'approved' : role, createdAt, lastSeen, ...(mobileKey ? { type: 'android' } : {}) }));
   }
   change(id, role) {
     const s = [...this.items.values()].find(v => v.id === id && v.role !== 'owner');
     if (!s || s.expiresAt < Date.now()) throw new AccessError(404, '设备不存在或请求已过期。');
     if (role === 'controller' && s.role !== 'pending') throw new AccessError(409, '设备不在等待确认状态。');
+    const previous = { role: s.role, expiresAt: s.expiresAt };
     s.role = role;
-    s.expiresAt = Date.now() + 30 * 86400000;
-    this.save();
+    s.expiresAt = s.mobileKey && role === 'controller' ? Number.MAX_SAFE_INTEGER : Date.now() + 30 * 86400000;
+    try { this.save(); }
+    catch (error) { Object.assign(s, previous); throw error; }
   }
 }

@@ -34,7 +34,10 @@ const server = createServer(async (req, res) => {
     if (input.name === failNextTool) { failNextTool = null; res.end(JSON.stringify({ isError: true, content: [{ type: 'text', text: '测试：后台暂不可用，请重试。' }] })); return; }
     if (input.name === 'mobile_permissions') Object.assign(state.backend.permissions, args);
     if (input.name === 'mobile_device_change') state.backend.devices[0].status = 'approved';
-    if (input.name === 'mobile_tunnel') state.backend.connection.tunnelStatus = args.action === 'start' ? 'running' : 'stopped';
+    if (input.name === 'mobile_tunnel') {
+      state.backend.connection.tunnelStatus = args.action === 'start' ? 'running' : 'stopped';
+      state.backend.connection.publicUrl = args.action === 'start' ? 'https://fixture.trycloudflare.com' : null;
+    }
     if (input.name === 'mobile_plugin_auto_update') state.pluginUpdate.autoUpdate = args.autoUpdate;
     if (input.name === 'mobile_backend_auto_update') state.backend.updates.autoUpdate = args.autoUpdate;
     if (input.name === 'mobile_pairing') state.backend.devices = [{ id: 'a'.repeat(24), name: '<img src=x onerror="window.attack=true">', status: 'pending' }];
@@ -53,6 +56,11 @@ try {
   assert.match(await frame.locator('#app-icon').getAttribute('src'), /^data:image\/png;base64,/);
   assert.equal(await frame.locator('#app-icon').evaluate(image => image.complete && image.naturalWidth > 0), true);
   assert.equal(await frame.locator('#pair-lan').evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(53, 101, 232)');
+  assert.equal(await frame.locator('#lan-addresses').innerText(), '已配对手机返回地址 http://192.168.1.2:43127');
+  await frame.locator('#internet-on').click();
+  await frame.locator('#internet-address').filter({ hasText: '已配对手机返回地址 https://fixture.trycloudflare.com' }).waitFor();
+  await frame.locator('#internet-off').click();
+  await frame.locator('#internet-address').waitFor({ state: 'hidden' });
   await frame.locator('#pair-lan').click(); await frame.locator('#pairing-box').waitFor({ state: 'visible' }); assert.match(await frame.locator('#pairing-link').innerText(), /#pair=fixture/);
   await frame.locator('#pending-device-list').getByText('批准连接', { exact: true }).waitFor();
   if (process.env.CODEX_MOBILE_UI_SCREENSHOT) { await page.setViewportSize({ width: 390, height: 1000 }); await page.screenshot({ path: process.env.CODEX_MOBILE_UI_SCREENSHOT, fullPage: true }); await page.setViewportSize({ width: 1050, height: 850 }); }

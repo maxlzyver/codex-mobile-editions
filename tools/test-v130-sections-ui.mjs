@@ -19,7 +19,7 @@ let fixture, holdNext = false;
 const held = [], requests = [], errors = [], results = [];
 function reset() {
   fixture = {
-    role: 'controller',
+    role: 'controller', sessionId: 'paired-device',
     threads: [chat('child-a', '项目甲的聊天', 'shared'), chat('child-b', '项目乙的聊天', 'second'), chat('loose', '独立聊天', null), chat('removed', '已移出项目', 'second'), chat('unlisted', '未知项目的聊天', 'unknown'), { ...chat('archived', '归档聊天', 'shared'), archived: true }],
     gpt: [chat('child-a', 'GPT 项目的聊天', 'shared')],
     catalog: {
@@ -34,6 +34,9 @@ function reset() {
       ],
     },
   };
+  fixture.threads[0].messages = Array.from({ length: 24 }, (_, index) => ({
+    id: `mobile-message-${index}`, role: 'assistant', text: `模拟消息 ${index} · 手机上的长聊天可以连续滑动。`,
+  }));
   requests.length = 0; holdNext = false; held.length = 0;
 }
 const json = (res, data, status = 200) => { if (!res.destroyed) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); } };
@@ -41,7 +44,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost'), p = url.pathname;
     requests.push(url.pathname + url.search);
-    if (p === '/api/bootstrap') return json(res, { role: fixture.role, csrfToken: 'fixture-csrf', features: { desktopProjects: true, nativeGpt: true }, app: { version }, status: { mode: 'standalone', codex: 'connected' }, desktop: { connected: true }, permissions: { canManage: false } });
+    if (p === '/api/bootstrap') return json(res, { role: fixture.role, session: fixture.role === 'controller' ? { id: fixture.sessionId } : null, csrfToken: 'fixture-csrf', features: { desktopProjects: true, nativeGpt: true }, app: { version }, status: { mode: 'standalone', codex: 'connected' }, desktop: { connected: true }, permissions: { canManage: false } });
     if (p === '/api/desktop/projects') {
       const value = structuredClone(fixture.catalog);
       if (holdNext) { holdNext = false; held.push(() => json(res, value)); return; }
@@ -51,6 +54,7 @@ const server = createServer(async (req, res) => {
     if (p === '/api/gpt/threads') return json(res, { available: true, threads: fixture.gpt, capabilities: { read: true, send: true } });
     if (/^\/api\/(?:gpt\/)?threads\/[^/]+$/.test(p)) {
       const thread = (p.includes('/gpt/') ? fixture.gpt : fixture.threads).find(item => item.id === p.split('/').at(-1));
+      if (!thread) return json(res, { error: '此聊天已不存在。' }, 404);
       return json(res, { thread, approvals: [], revision: 'fixture', page: { hasMore: false } });
     }
     if (p === '/api/projects') return json(res, { projects: [] });
@@ -74,12 +78,13 @@ const waitForHeld = async () => { const end = Date.now() + 5000; while (!held.le
 try {
   for (const width of [390, 320]) {
     reset();
-    const context = await browser.newContext({ viewport: { width, height: 900 }, isMobile: true, hasTouch: true });
+    const height = width === 320 ? 560 : 700;
+    const context = await browser.newContext({ viewport: { width, height }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     await context.addInitScript(({ edition, version, width }) => {
       localStorage.setItem(`codex-mobile.${edition}.notice.lastVersion`, version);
       localStorage.setItem(`codex-mobile.${edition}.appearance.v1`, JSON.stringify({ theme: width === 320 ? 'dark' : 'blue', font: 'system', size: 22 }));
     }, { edition, version, width });
-    const page = await context.newPage();
+    let page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', req => { if (!req.url().startsWith(origin) && !req.url().startsWith('data:')) errors.push('External request ' + req.url()); });
     await page.goto(origin); await page.waitForSelector('.sidebar-section');
@@ -123,6 +128,56 @@ try {
     await projectNode(page, 'shared').locator('summary').tap();
     await page.locator('[data-thread-id="child-a"]').tap();
     await page.waitForFunction(() => document.querySelector('#thread-title').textContent === '项目甲的聊天');
+    const bounds = await page.locator('#conversation-scroll').boundingBox();
+    const composer = await page.locator('#composer').boundingBox();
+    assert.ok(bounds.height > height * 0.62 && bounds.y + bounds.height <= composer.y, JSON.stringify({ width, height, bounds, composer }));
+    assert.ok(composer.y + composer.height <= height, JSON.stringify(composer));
+    const client = await context.newCDPSession(page);
+    const x = Math.round(bounds.x + bounds.width / 2), y = Math.round(bounds.y + bounds.height / 3);
+    await page.waitForFunction(() => { const scroll = document.querySelector('#conversation-scroll'); return scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop < 3; });
+    const scrollTop = await page.locator('#conversation-scroll').evaluate(element => element.scrollTop);
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (const offset of [25, 55, 90]) await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + offset }] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForFunction(top => document.querySelector('#conversation-scroll').scrollTop < top - 25, scrollTop);
+    await client.detach();
+    await page.screenshot({ path: path.join(output, `${edition}-${width}-chat.png`) });
+
+    // Check the control with a click after the touch scroller may still have momentum.
+    await page.locator('#composer-options-toggle').click();
+    assert.equal(await page.locator('#task-settings').isVisible(), true);
+    await page.locator('#prompt').focus();
+    assert.equal(await page.locator('#task-settings').isVisible(), false);
+    // Resize only the visual viewport, as when the on-screen keyboard opens.
+    const keyboard = await page.evaluate(() => {
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 330 });
+      visualViewport.dispatchEvent(new Event('resize'));
+      return {
+        shell: document.querySelector('#app').clientHeight,
+        reading: document.querySelector('#conversation-scroll').clientHeight,
+        sendBottom: document.querySelector('#send').getBoundingClientRect().bottom,
+      };
+    });
+    assert.ok(keyboard.shell === 330 && keyboard.reading >= 155 && keyboard.sendBottom <= 330, JSON.stringify(keyboard));
+    await page.evaluate(() => {
+      document.querySelector('#prompt').blur();
+      delete visualViewport.height;
+      visualViewport.dispatchEvent(new Event('resize'));
+    });
+    await page.setViewportSize({ width: 844, height: 390 });
+    const landscape = await page.locator('#conversation-scroll').boundingBox();
+    assert.ok(landscape.height > 195 && await page.locator('#sidebar-open').isVisible(), JSON.stringify(landscape));
+    await page.setViewportSize({ width, height });
+
+    // The clean link works even after the old tab is gone.
+    await page.waitForFunction(size => visualViewport.width === size, width);
+    await page.locator('#sidebar-open').click();
+    await page.waitForFunction(() => document.querySelector('#workspace').classList.contains('sidebar-open'));
+    await page.locator('#return-entry-open').click();
+    const returnEntry = await page.locator('#return-entry-url').inputValue();
+    assert.equal(returnEntry, new URL('/', origin).href);
+    await page.close(); page = await context.newPage();
+    await page.goto(returnEntry); await page.waitForFunction(() => document.querySelector('#thread-title').textContent === '项目甲的聊天');
     await page.locator('#sidebar-open').tap();
     assert.equal(await page.locator('.thread-item.active').getAttribute('data-thread-id'), 'child-a');
 
@@ -152,6 +207,25 @@ try {
     assert.equal(await projectNode(page, 'shared').locator('[data-thread-id="child-a"]').count(), 0);
     assert.equal(await page.locator('[data-thread-id="child-a"]').count(), 1);
 
+    // The same thread ID in GPT and Codex must restore with the original mode.
+    await page.locator('#chat-mode-gpt').tap();
+    await page.locator('#sidebar-open').tap();
+    await page.locator('[data-thread-id="child-a"]').tap();
+    await page.waitForFunction(() => document.querySelector('#thread-title').textContent === 'GPT 项目的聊天');
+    await page.close(); page = await context.newPage();
+    await page.goto(returnEntry);
+    await page.waitForFunction(() => document.querySelector('#thread-title').textContent === 'GPT 项目的聊天');
+    assert.equal(await page.locator('#chat-mode-gpt').getAttribute('aria-pressed'), 'true');
+    fixture.gpt = [];
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#toast').textContent === '此聊天已不存在。');
+    assert.equal(await page.locator('#send').isDisabled(), true);
+    await page.locator('#chat-mode-codex').tap();
+    await page.locator('#sidebar-open').tap();
+    await page.locator('[data-thread-id="child-a"]').tap();
+    await page.waitForFunction(() => document.querySelector('#thread-title').textContent === '项目甲的聊天');
+    await page.locator('#sidebar-open').tap();
+
     // Revocation clears private sidebar metadata and rejects a late response.
     holdNext = true; await page.locator('#refresh-threads').tap(); await waitForHeld();
     fixture.role = 'anonymous';
@@ -159,7 +233,14 @@ try {
     await page.waitForFunction(() => document.querySelector('#app').dataset.role === 'anonymous');
     held.shift()(); await page.waitForTimeout(100);
     assert.equal(await page.locator('#thread-list').textContent(), '');
-    results.push({ width, checks: 'section order, mixed members, identity, folding, refresh, stale reads, disconnect, revocation', passed: true });
+    const revokedRequests = requests.length;
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#app').dataset.role === 'anonymous');
+    assert.deepEqual(requests.slice(revokedRequests).filter(url => url.startsWith('/api/')), ['/api/bootstrap']);
+    fixture.role = 'controller'; fixture.sessionId = 'newly-paired-device';
+    await page.reload(); await page.waitForSelector('#workspace:not(.hidden)');
+    assert.equal(await page.locator('#thread-title').textContent(), '新的开始');
+    results.push({ width, height, readingHeight: bounds.height, keyboardReadingHeight: keyboard.reading, checks: 'sections, folding, swipe, reopen, GPT mode, missing chat, revocation', passed: true });
     await context.close();
   }
   assert.deepEqual(errors, []);

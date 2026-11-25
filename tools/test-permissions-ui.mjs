@@ -108,7 +108,7 @@ try {
     assert.match(await page.locator('#release-notice-title').textContent(), /欢迎使用/);
     assert.ok((await page.locator('#release-notice-version').textContent()).includes(versions[id]));
     const releaseText = await page.locator('#release-notice').textContent();
-    for (const feature of ['结果先显示', '长对话更轻快', '新的应用图标', '过程可折叠', '发出的指令看得见', '文件直接打开', '项目与模型更清晰', '手机权限默认关闭', '新版本提醒']) assert.ok(releaseText.includes(feature), `Missing release feature: ${feature}`);
+    for (const feature of ['手机聊天空间更大', '离开浏览器也能继续', '在电脑找回入口']) assert.ok(releaseText.includes(feature), `Missing release feature: ${feature}`);
     await assertLayout(page, '#release-notice');
     await page.screenshot({ path: path.join(output, id + '-' + role + '-notice.png'), fullPage: true });
     await page.locator('#release-notice-done').tap();

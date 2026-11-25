@@ -17,6 +17,12 @@ Codex 移动助手让手机连接自己的电脑，查看聊天和任务进度�
 
 两种入口连接同一份本地助手后台，共享手机配对和权限设置。手机端始终使用浏览器，无需安装本工具的手机 App。插件仍需要完整软件包中的后台与运行组件，因此安装后请保留整份软件文件夹。
 
+## Android App
+
+从对应的 GitHub 发行页下载 APK。在电脑端打开「连接手机」，在 App 内扫描二维码，再由电脑批准。也可把电脑端复制的配对链接粘贴到 App。网页版入口同样适用。
+
+App 记住上次打开的聊天或项目。左上角打开侧栏，点开聊天或文件后自动收起。电脑端同一条互联网隧道继续运行时，App 可在 Wi-Fi 和移动数据之间切换并重连。隧道换地址后，回到可连接原局域网地址的网络即可同步，也可在 App 的连接面板手动更新。 [Android 构建与使用](android/README.md)
+
 ## 主要功能
 
 ### 分区、项目与聊天
@@ -61,6 +67,8 @@ Codex 聊天支持从手机相册或文件管理器选择图片和普通文件�
 
 手机沿用电脑的 Codex 登录，不需要在手机重复输入账号或 API Key。二维码两分钟有效、仅能使用一次；手机授权默认 30 天，清除 Cookie、入口变化或授权过期后需要重新配对。
 
+手机在「任务列表 → 保存返回入口」可将当前地址加入书签。用同一浏览器重新打开时，配对有效即可继续上次的聊天。电脑网页和 Codex 插件也会显示已配对设备的返回地址。
+
 以下权限分别控制，默认关闭，可在电脑网页或 Codex 插件中设置：
 
 | 权限 | 开启后的作用 |
@@ -81,13 +89,13 @@ Codex 聊天支持从手机相册或文件管理器选择图片和普通文件�
 
 ## 下载与开始使用
 
-当前软件与插件均为 **1.3.1**。请从 [最新发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/latest) 下载对应系统的完整软件 ZIP，包内已经包含插件、安装工具和教学。
+本源码的软件与插件版本为 **1.4.0**。公开版下载见 [发布页](https://github.com/maxlzyver/codex-mobile-editions/releases/latest)。完整软件 ZIP 内含插件、安装工具和教学。
 
 | 专用版 | 系统要求 | 完整软件包 | 插件安装入口 |
 | --- | --- | --- | --- |
-| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | `codex-mobile-windows11-1.3.1-x64.zip` | `Install-Plugin.cmd` |
-| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | `codex-mobile-windows10-1.3.1-x64.zip` | `Install-Plugin.cmd` |
-| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | `codex-mobile-macos-1.3.1-universal.zip` | `Install-Plugin.command` |
+| [Windows 11](editions/windows11/README.md) | 原生 x64，内部版本 22000+ | `codex-mobile-windows11-1.4.0-x64.zip` | `Install-Plugin.cmd` |
+| [Windows 10](editions/windows10/README.md) | 22H2，内部版本 19045，原生 x64 | `codex-mobile-windows10-1.4.0-x64.zip` | `Install-Plugin.cmd` |
+| [macOS](editions/macos/README.md) | macOS 14+，Apple 芯片 / Intel | `codex-mobile-macos-1.4.0-universal.zip` | `Install-Plugin.command` |
 
 完整解压到当前用户可写的目录，保持目录结构。包内自带 Node.js 和网络连接组件，无需另装 npm；Codex 本身需在电脑上安装兼容版本。GitHub 自动生成的 **Source code ZIP 不含运行组件**，不能代替完整软件包。Windows ARM64 与 32 位系统不在支持范围，Windows 10 专用版也仍需兼容的 Codex 环境。
 
@@ -132,6 +140,11 @@ macOS 首次运行未签名脚本时，可按系统提示在 Finder 中右键“
 ## 版本更新
 
 下面按版本列出已有更新记录；[CHANGELOG.md](CHANGELOG.md) 保留完整原文。当前功能与安装方法以上方说明为准，历史版本中的安装步骤用于对应版本。
+
+### V1.4.0
+
+- 手机端缩减固定栏和输入区，项目与模型设置按需展开。聊天区随键盘调整。
+- 手机可保存返回入口，配对有效时从同一浏览器恢复上次的 Codex 或 GPT 聊天。电脑网页和 Codex 插件显示当前返回地址。
 
 ### V1.3.1 · 2026-10-15
 

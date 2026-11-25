@@ -1,6 +1,6 @@
 {
   "name": "codex-mobile",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "在 Codex 内管理移动助手、手机配对、设备权限与软件及插件更新。",
   "skills": "./skills/",
   "mcpServers": "./mcp.json",

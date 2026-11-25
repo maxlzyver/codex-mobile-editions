@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import { createRequire } from 'node:module';
 import { Sessions, AccessError, equal, loopback } from './lib/security.mjs';
 import { Tasks } from './lib/tasks.mjs';
+import { AndroidAccess } from './lib/android-access.mjs';
 import { CodexBridge } from './lib/codex-bridge.mjs';
 import { TunnelManager } from './lib/tunnel.mjs';
 import { Projects } from './lib/files.mjs';
@@ -50,6 +51,7 @@ export async function createConsole(options = {}) {
   const sendLocks = new Set();
   let port = options.port ?? Number(process.env.CODEX_MOBILE_PORT || 43127);
   let tunnel;
+  const android = new AndroidAccess({ runtime, sessions, origin: () => `http://127.0.0.1:${port}` });
   let closing = false;
   let closePromise;
   let signedIn = null;
@@ -98,19 +100,26 @@ export async function createConsole(options = {}) {
   function localOwnerRequest(req) { return loopback(req.socket.remoteAddress) && [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(req.headers.host) && !req.headers['x-forwarded-for'] && !req.headers['cf-connecting-ip']; }
   function send(res, status, value) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); }
   function setCookie(res, secret, origin) { res.setHeader('Set-Cookie', `${cookieName()}=${secret}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${origin.startsWith('https:') ? '; Secure' : ''}`); }
-  async function body(req) {
+  async function body(req, maxBytes = 128000) {
     if (!req.headers['content-type']?.toLowerCase().startsWith('application/json')) throw new AccessError(415, '请求必须使用 JSON。');
     let length = 0;
     const chunks = [];
-    for await (const c of req) { length += c.length; if (length > 128000) throw new AccessError(413, '请求内容过大。'); chunks.push(c); }
+    for await (const c of req) { length += c.length; if (length > maxBytes) throw new AccessError(413, '请求内容过大。'); chunks.push(c); }
     try { const v = JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!v || Array.isArray(v) || typeof v !== 'object') throw new Error(); return v; } catch { throw new AccessError(400, '无效的 JSON 请求。'); }
   }
   function authorized(session, owner = false) {
     if (!session || !['owner', 'controller'].includes(session.role)) throw new AccessError(401, '请先扫描电脑上的二维码并在电脑端确认连接。');
     if (owner && session.role !== 'owner') throw new AccessError(403, '此操作只能在电脑管理端执行。');
   }
+  function requestSession(req) {
+    const grant = req.headers['x-codex-android-grant'];
+    if (grant && localOwnerRequest(req)) return android.sessionForLocalRequest(grant);
+    const session = sessions.get(req.headers.cookie, cookieName());
+    // Owner cookies never authorize requests arriving via a tunnel or LAN.
+    return session?.role === 'owner' && !localOwnerRequest(req) ? null : session;
+  }
   function reauthorize(req, owner = false) {
-    const current = sessions.get(req.headers.cookie, cookieName());
+    const current = requestSession(req);
     authorized(current, owner);
     if (current.role === 'owner' && !localOwnerRequest(req)) throw new AccessError(401, '当前连接已失效。');
     return current;
@@ -137,7 +146,7 @@ export async function createConsole(options = {}) {
   }
   function pairingView(p) {
     if (!p || p.expiresAt <= Date.now()) return { url: null, qrDataUrl: null, expiresAt: 0 };
-    const url = p.baseUrl + '/#pair=' + p.token;
+    const url = p.baseUrl + '/#pair=' + p.token + '&desktop=' + android.publicIdentity();
     const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
     const svg = qr.createSvgTag({ cellSize: 5, margin: 20, scalable: true });
     return { url, qrDataUrl: 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'), expiresAt: p.expiresAt };
@@ -164,16 +173,24 @@ export async function createConsole(options = {}) {
         res.end(method === 'HEAD' ? undefined : data); return;
       }
       if (method === 'GET' && url.pathname === '/health') { send(res, 200, { ok: true, app: 'codex-mobile', version: APP_INFO.version }); return; }
-      let session = sessions.get(req.headers.cookie, cookieName());
-      // Owner cookies never authorize requests arriving via a tunnel or LAN.
-      if (session?.role === 'owner' && !localOwnerRequest(req)) session = null;
+      if (method === 'POST' && url.pathname === '/api/android/challenge') {
+        sessions.rate('android:' + (req.headers['cf-connecting-ip'] || req.socket.remoteAddress));
+        send(res, 200, android.challenge(await body(req))); return;
+      }
+      if (method === 'POST' && url.pathname === '/api/android/connect') {
+        send(res, 200, android.connect(await body(req))); return;
+      }
+      if (method === 'POST' && url.pathname === '/api/android/exchange') {
+        send(res, 200, await android.exchange(await body(req, 16 * 1024 * 1024))); return;
+      }
+      const session = requestSession(req);
       authenticatedRequest = ['owner', 'controller'].includes(session?.role);
       const projectScope = () => ({ includeMobileRoots: session?.role === 'owner' || permissions.state.allowOtherFiles });
       if (method === 'GET' && url.pathname === '/api/bootstrap') {
         const role = session?.role || 'anonymous';
         const result = { role, csrfToken: session?.csrf || null, session: session ? { id: session.id, name: session.name } : null };
         if (['owner', 'controller'].includes(role)) Object.assign(result, { app: APP_INFO, status: { codex: signedIn === false ? 'error' : bridge.state.connected ? 'connected' : bridge.state.error ? 'error' : 'connecting', mode: bridge.state.mode, version: APP_INFO.version, hostname: os.hostname(), authenticated: signedIn, error: signedIn === false ? '尚未登录 Codex。请在托盘菜单选择“登录 Codex”，登录后点击“重新连接”。' : bridge.state.error }, defaultCwd });
-        if (role === 'owner') result.connection = currentConnections();
+        if (role === 'owner' || role === 'controller' && session.mobileKey) result.connection = currentConnections();
         if (['owner', 'controller'].includes(role)) result.permissions = permissions.view(role);
         if (['owner', 'controller'].includes(role)) result.desktop = { connected: Boolean(desktop?.state?.connected), error: desktop?.state?.error || null };
         if (['owner', 'controller'].includes(role)) result.features = { attachments: true, desktopProjects: Boolean(desktopProjects), nativeGpt: Boolean(nativeGpt) };
@@ -373,7 +390,7 @@ export async function createConsole(options = {}) {
           const view = await tasks.get(match[1], { stage });
           // Recheck authorization after slow reads, including revocation while a
           // background history request was in flight. Validators never grant access.
-          const current = sessions.get(req.headers.cookie, cookieName());
+          const current = requestSession(req);
           authorized(current);
           if (current.role === 'owner' && !localOwnerRequest(req)) throw new AccessError(401, '当前连接已失效。');
           const etag = `"${view.revision}"`;

@@ -4,7 +4,7 @@
     {
       "bytes": 144384,
       "path": "Codex-Mobile.exe",
-      "sha256": "b8f6d9c54883ce4459124d58d61cae5c51ef491927153616e1b24cd93a630d7f"
+      "sha256": "d8144e08aa8d60b63642fbe1a220417323e6c23463e61c1a1367efdc1ae1f3af"
     },
     {
       "bytes": 1096,
@@ -17,9 +17,9 @@
       "sha256": "b46506b571c85728aa8745661930751dede47bf307ae29e65931c2334460ffd6"
     },
     {
-      "bytes": 12725,
+      "bytes": 12879,
       "path": "README.md",
-      "sha256": "2a0b285bfa0e380756deb5713c795ba49526b11e7a7bd410ef6be3d8eb5d21cd"
+      "sha256": "9506f8c96eb2ca7971b93637187d6abaa71f009f728fd116877aad514342cf5a"
     },
     {
       "bytes": 106,
@@ -44,7 +44,7 @@
     {
       "bytes": 1582,
       "path": "build-launcher.ps1",
-      "sha256": "a4273c4193e6fcf4f62f202ecd56759762e5c27d9e1597457dc16337dd7d0d41"
+      "sha256": "6a06703afada8325da8025c53e2d6636657004752d1a7a216fbb1e1c88153299"
     },
     {
       "bytes": 6776,
@@ -57,9 +57,9 @@
       "sha256": "b84ada33e0aef1c716a408c9240a0441745870e56421af8dd18c2fea2ce8da0e"
     },
     {
-      "bytes": 2494,
+      "bytes": 1674,
       "path": "docs/UPDATE-NOTES.md",
-      "sha256": "73b8b387e1ff7cad663e1b9cb61527c9b3ec20b945ba743f9ab00198186b882f"
+      "sha256": "2a43250d80533c726a72d7abe08f76f9bcf2c57d8f088ef05b7e76a76aaf288f"
     },
     {
       "bytes": 2828,
@@ -107,14 +107,24 @@
       "sha256": "21ef46e18db43f157a4f677eba95c2122a516e2ec10113d8b8b6494904224ec6"
     },
     {
+      "bytes": 2494,
+      "path": "docs/V1.3.1-UPDATE-NOTES.md",
+      "sha256": "73b8b387e1ff7cad663e1b9cb61527c9b3ec20b945ba743f9ab00198186b882f"
+    },
+    {
       "bytes": 257,
       "path": "edition.json",
-      "sha256": "99af792a438ed262f14050a7686fe695b16e2017d0e5173699bac315ecab2a6a"
+      "sha256": "ff0efc38d93792c52ca75b7b7f8d1bec11985e3985925c6e52f4e8e3ea1a3fd6"
     },
     {
       "bytes": 41183,
       "path": "launcher/Launcher.cs",
-      "sha256": "93b56671ea952a7d2b8403537410252610d91e3bfb57408b478e71fe0fe29349"
+      "sha256": "d4c934f9ba094b931d3459c0c421269cbd1bb435bd33097707e979e14afd9eb3"
+    },
+    {
+      "bytes": 10685,
+      "path": "lib/android-access.mjs",
+      "sha256": "3222f60a8a77af0dcd43259ca24d51fd49068e57632d19a57601ac65473e6726"
     },
     {
       "bytes": 969,
@@ -172,9 +182,9 @@
       "sha256": "a15e417c87eb1ab417501ae5dc900c0e31b610dead231ca8ac0bce7b166be808"
     },
     {
-      "bytes": 2058668,
+      "bytes": 2058256,
       "path": "lib/plugin-bundle.json",
-      "sha256": "fd047c82a2d22269eab121c6469e4beab55233b24cc3ab683fd0ebf9640fcfd2"
+      "sha256": "f53fdcf482b9139511f37477f8f7358e73eecb47925a2ded83fa229284105fb3"
     },
     {
       "bytes": 1296,
@@ -182,9 +192,9 @@
       "sha256": "48b76d447ee5a56378bae32e17180cd45085df887c08baec39e245c4bb40bb90"
     },
     {
-      "bytes": 3674,
+      "bytes": 4390,
       "path": "lib/security.mjs",
-      "sha256": "31b378b01796e67a30602a926483c89fc50589a4809ec07f05cf848517d72626"
+      "sha256": "5834cb83e92eb2b2bfaf9a305209b1c869f1ebee679ea6550889192308c2b60b"
     },
     {
       "bytes": 6678,
@@ -214,7 +224,7 @@
     {
       "bytes": 579,
       "path": "package.json",
-      "sha256": "eaba0e304a88aee59cd81e44af1266f840deb2cd755666e5fb3880c4e128e774"
+      "sha256": "905c645081f9d98cdf9217583084b4aae3b97b20f283637ad0738998f18aa42c"
     },
     {
       "bytes": 40084,
@@ -232,9 +242,9 @@
       "sha256": "ae7ffc0a72459a8c57518c5b060b9153760d5c43822426a9af09af3dadde2f96"
     },
     {
-      "bytes": 115386,
+      "bytes": 121518,
       "path": "public/app.js",
-      "sha256": "a984747afa855a7db033635bebe35e86f2acc8a76c13ddc5d04dfc52ad7d905a"
+      "sha256": "4369286253b79ad34716be565de8081cb84c1c61d79668fa40c8b20118f01492"
     },
     {
       "bytes": 35362,
@@ -252,9 +262,9 @@
       "sha256": "c5b951ebb87bbd143dc62bcf2c698509ed87e551b0a15ea21220f8dc00c91185"
     },
     {
-      "bytes": 36346,
+      "bytes": 37330,
       "path": "public/index.html",
-      "sha256": "540c7d09f4ee94b4a9ac22ff3f44e6b9c7521f7dd95e9da7a00b1041cc34afc9"
+      "sha256": "929819163f5ad1ae52eb684376566cc60bc7275d32844da742bfac4472aa3ace"
     },
     {
       "bytes": 629,
@@ -272,14 +282,14 @@
       "sha256": "b9fc3e1a02b8d19f8f6fd9a575ca5410cc3eb2cdf8640e0e44b8160c669ec3e2"
     },
     {
-      "bytes": 26993,
+      "bytes": 26936,
       "path": "public/settings.js",
-      "sha256": "0cb7335d6ede44a6298d29843ac57d15813613b7a9a9d0cea82fe3c24d713934"
+      "sha256": "0ea618feff9ff1f0e7e9f92bcf0fa4e1b193183f87acb11e960ae2564bb0b41d"
     },
     {
-      "bytes": 49819,
+      "bytes": 56222,
       "path": "public/styles.css",
-      "sha256": "4df9dfc7e5f31f4d822c71ced9b849548618bc99090d0a743e806149245c9653"
+      "sha256": "ca6dcc29dd3607195f22a061cf892f65e9696d364bfe8f444e95c4c064380e4e"
     },
     {
       "bytes": 121660,
@@ -307,9 +317,9 @@
       "sha256": "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a"
     },
     {
-      "bytes": 35327,
+      "bytes": 36337,
       "path": "server.mjs",
-      "sha256": "be1a298afb0c53d2487031e5331fecc78763c453f5856a4743a1a0c3c385010f"
+      "sha256": "d70ff978a198803f63f69bc3d6ce654865b81182c04acbf7e4c208775193fcc9"
     },
     {
       "bytes": 321,
@@ -339,8 +349,8 @@
   ],
   "name": "Codex 移动助手",
   "platform": "Windows 10 x64",
-  "releaseNotes": "V1.3.1 · 软件包内置插件一键安装\n\n- Windows 11、Windows 10、macOS 软件与插件统一为 1.3.1。\n- 完整软件包已经包含插件和安装工具，不用另外下载插件。Windows 根目录新增 Install-Plugin.cmd；macOS 根目录新增 Install-Plugin.command。\n- 双击后直接绑定所在软件目录，使用包内 Node.js 完成插件注册，无需 npm、手动输入命令或添加插件市场。\n- 安装时不必提前打开 Codex，但必须已经安装 Codex。工具不模拟鼠标键盘、不操作其他窗口、不打开浏览器或登录窗口，也不会强制重启 Codex。\n- 保留软件网页、蓝白插件界面、原图标、当前页批准设备、手机权限和更新功能。\n\n插件使用教学\n\n1. 下载与你系统对应的 1.3.1 完整软件 ZIP，完整解压到可写目录。不要在压缩包内直接运行，也不要下载 Source code 代替软件包。\n2. Windows 双击软件文件夹根目录 Install-Plugin.cmd；macOS 双击同目录 Install-Plugin.command。无需先启动软件或打开 Codex。\n3. 安装完成后自行打开 Codex，进入“插件 → Codex 移动助手”，点“打开插件”。Codex 已经运行时可关闭再启用本插件，必要时自行重开 Codex。\n4. 确认电脑端 Codex 已登录，在插件中生成二维码。手机扫码后直接在当前插件页面点“批准连接”。设置入口可直接调整手机权限，也可以在对话中说“打开移动助手管理面板”。\n5. “更新”中分别管理软件与插件的检查更新、一键更新及自动更新。自动更新默认关闭；插件安装后需要宿主重新加载时会显示待生效。\n\n仍可使用 Codex-Mobile.exe（Windows）或 Start.command（macOS）启动独立软件。\n从旧版在线更新的用户可运行 tools/Install-Plugin.cmd（Windows）或 tools/Install-Plugin.command（macOS）；完整 ZIP 的根目录也提供入口。\n详细教学与故障处理见 docs/V1.3.1-PLUGIN-INSTALL.md。\n\n安装修正\n\n- 在线升级后首次启动会补齐根目录安装入口，已有文件保持原样。\n- 修复卸载插件后旧插件源仍存在时的一键安装失败：识别并复用本插件原有有效配置，避免同名插件源冲突。\n- 安装失败日志增加阶段、退出码和经过处理的错误详情，便于定位原因。\n- 产品版本仍为 1.3.1；此前已经升级到同版本的用户不会再次收到自动安装，请使用修复后的完整软件包。",
+  "releaseNotes": "V1.4.0 · 手机聊天与返回入口\n\n- 手机聊天栏调为紧凑布局。项目、模型与思考强度放进输入框旁的设置按钮。弹出键盘时，聊天区会跟随手机可用高度调整。\n- 已配对的手机可打开「任务列表 → 保存返回入口」，把地址加到当前浏览器的书签或主屏幕。重新打开后会继续上次的 Codex 或 GPT 聊天。\n- 电脑网页和 Codex 插件的手机连接页会显示当前返回地址。电脑需要保持在线；如果局域网地址或临时外网地址变化，请在新地址重新配对。\n\n- 新增 Android APK。手机扫码并在电脑端批准后，关闭 App、更新或切换网络仍可使用原设备绑定。换机、卸载重装、清除 App 数据或电脑端撤销后需重新扫码。\n- Android 使用原生聊天和可收起的项目侧栏，支持项目文件浏览、文本预览、下载和附件发送。Android 单个上传附件上限为 8 MiB。\n- 同一个互联网隧道运行期间使用同一随机 HTTPS 地址。若隧道重新生成，在原局域网重连可同步新地址，也可在 App 中手动更新地址。设备绑定随原电脑保留。\n- 助手每 6 小时检查一次更新。更新提醒可以选择本版本不再提示。\n\n插件使用教学\n\n1. 完整解压对应系统的 1.4.0 软件 ZIP。\n2. Windows 双击根目录 Install-Plugin.cmd，macOS 双击根目录 Install-Plugin.command。\n3. 打开 Codex，进入「插件 → Codex 移动助手」，生成二维码。手机扫码后，在电脑上批准设备。\n4. 已有配对可在同一浏览器打开返回地址。独立软件也可用 Codex-Mobile.exe 或 Start.command 启动。",
   "repository": "maxlzyver/codex-mobile-editions",
   "runtimePolicy": "preserve",
-  "version": "1.3.1"
+  "version": "1.4.0"
 }
